@@ -3,36 +3,85 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package minipc.parser;
+
 import java.util.ArrayList;
 import java.util.List;
+
 /**
+ * Se encarga de validar la sintaxis básica de las instrucciones ASM
+ * utilizadas por la Mini PC.
+ *
+ * Verifica que:
+ *
+ * - Las operaciones sean válidas.
+ * - Los registros utilizados existan.
+ * - Las instrucciones posean los operandos requeridos.
+ * - Los valores utilizados en MOV sean números enteros válidos.
+ * - Los valores inmediatos se encuentren dentro del rango permitido
+ *   por el formato de 8 bits utilizado por el simulador.
+ *
+ * La clase no crea objetos Instruccion ni ejecuta operaciones;
+ * únicamente detecta errores antes de que el programa sea procesado
+ * por ASMParser.
  *
  * @author CR TECH
  */
 public class ASMValidator {
 
-    private static final List<String> REGISTROS = List.of("AX", "BX", "CX", "DX");
+    /**
+     * Registros generales permitidos por la Mini PC.
+     */
+    private static final List<String> REGISTROS =
+            List.of("AX", "BX", "CX", "DX");
 
-    private static final List<String> OPERACIONES = List.of("MOV", "LOAD", "STORE", "ADD", "SUB");
+    /**
+     * Operaciones admitidas por el lenguaje ASM simplificado.
+     */
+    private static final List<String> OPERACIONES =
+            List.of("MOV", "LOAD", "STORE", "ADD", "SUB");
 
+
+    /**
+     * Valida todas las líneas de un programa ASM.
+     *
+     * Las líneas vacías son ignoradas. Cada error encontrado se agrega
+     * a una lista indicando el número de línea correspondiente.
+     *
+     * Si la lista retornada está vacía, el programa no presenta
+     * errores de validación detectados por esta clase.
+     *
+     * @param lineas líneas del programa ASM que se desea validar
+     * @return lista con los errores encontrados
+     */
     public List<String> validarPrograma(List<String> lineas) {
 
-        List<String> errores = new ArrayList<>();
+        List<String> errores =
+                new ArrayList<>();
 
         for (int i = 0; i < lineas.size(); i++) {
 
-            String linea = lineas.get(i).trim();
+            String linea =
+                    lineas.get(i).trim();
 
-            // Ignorar líneas vacías
+            // Las líneas vacías no representan instrucciones.
             if (linea.isEmpty()) {
                 continue;
             }
 
-            String error = validarLinea(linea);
+            String error =
+                    validarLinea(linea);
 
+            /*
+             * Si la línea contiene un error, se guarda junto
+             * con su posición original dentro del archivo.
+             */
             if (error != null) {
+
                 errores.add(
-                        "Línea " + (i + 1) + ": " + error
+                        "Línea "
+                        + (i + 1)
+                        + ": "
+                        + error
                 );
             }
         }
@@ -40,23 +89,65 @@ public class ASMValidator {
         return errores;
     }
 
+
+    /**
+     * Valida una única instrucción ASM.
+     *
+     * Primero comprueba que la operación exista y posteriormente
+     * delega la validación de sus operandos al método correspondiente.
+     *
+     * @param linea instrucción ASM que se desea validar
+     * @return descripción del error encontrado, o null si la línea es válida
+     */
     private String validarLinea(String linea) {
 
-        String[] partes = linea.split("\\s+", 2);
+        /*
+         * La instrucción se divide únicamente en dos partes:
+         *
+         * partes[0] -> operación
+         * partes[1] -> operandos
+         *
+         * Ejemplo:
+         *
+         * MOV AX, 5
+         *
+         * partes[0] = "MOV"
+         * partes[1] = "AX, 5"
+         */
+        String[] partes =
+                linea.split("\\s+", 2);
 
-        String operacion = partes[0].toUpperCase();
+        String operacion =
+                partes[0].toUpperCase();
 
-        // Verificar operación
+
+        /*
+         * Se verifica primero que la operación pertenezca
+         * al conjunto de instrucciones soportadas.
+         */
         if (!OPERACIONES.contains(operacion)) {
-            return "Operación no válida: " + operacion;
+
+            return "Operación no válida: "
+                    + operacion;
         }
 
+
+        /*
+         * Toda operación válida requiere al menos un operando.
+         */
         if (partes.length < 2) {
+
             return "La instrucción está incompleta.";
         }
 
-        String operandos = partes[1].trim();
 
+        String operandos =
+                partes[1].trim();
+
+
+        /*
+         * La validación específica depende del tipo de operación.
+         */
         switch (operacion) {
 
             case "MOV":
@@ -66,54 +157,124 @@ public class ASMValidator {
             case "STORE":
             case "ADD":
             case "SUB":
-                return validarOperacionRegistro(operacion,operandos);
+
+                return validarOperacionRegistro(
+                        operacion,
+                        operandos
+                );
+
             default:
                 return "Operación no reconocida.";
         }
     }
 
 
+    /**
+     * Valida los operandos de una instrucción MOV.
+     *
+     * MOV debe utilizar el formato:
+     *
+     * MOV REGISTRO, VALOR
+     *
+     * El registro debe ser AX, BX, CX o DX y el valor debe ser
+     * un número entero comprendido entre -127 y 127.
+     *
+     * @param operandos contenido ubicado después de la operación MOV
+     * @return descripción del error encontrado, o null si es válido
+     */
     private String validarMOV(String operandos) {
 
-        String[] partes = operandos.split(",");
+        /*
+         * MOV posee dos operandos separados por una coma:
+         *
+         * registro, valor
+         */
+        String[] partes =
+                operandos.split(",");
+
 
         if (partes.length != 2) {
-            return "MOV debe tener el formato: MOV REGISTRO, VALOR";
+
+            return "MOV debe tener el formato: "
+                    + "MOV REGISTRO, VALOR";
         }
 
-        String registro = partes[0].trim().toUpperCase();
-        String valorTexto = partes[1].trim();
 
+        String registro =
+                partes[0]
+                        .trim()
+                        .toUpperCase();
+
+        String valorTexto =
+                partes[1].trim();
+
+
+        // Verificar que el registro exista.
         if (!REGISTROS.contains(registro)) {
-            return "Registro no válido: " + registro;
+
+            return "Registro no válido: "
+                    + registro;
         }
+
 
         try {
 
-            int valor = Integer.parseInt(valorTexto);
+            int valor =
+                    Integer.parseInt(valorTexto);
 
             /*
-             * Según la tarea:
-             * 1 bit = signo
-             * 7 bits = valor
+             * El formato entero utilizado por la Mini PC posee:
              *
-             * Por ahora limitamos el valor entre -127 y 127.
+             * 1 bit para el signo.
+             * 7 bits para la magnitud.
+             *
+             * Por esta razón se permite un rango de -127 a 127.
              */
             if (valor < -127 || valor > 127) {
+
                 return "El valor debe estar entre -127 y 127.";
             }
 
         } catch (NumberFormatException e) {
+
             return "El valor de MOV debe ser un número entero.";
         }
 
+
+        // null indica que no se encontró ningún error.
         return null;
     }
-    private String validarOperacionRegistro(String operacion,String operando){
-        String registro = operando.trim().toUpperCase();
+
+
+    /**
+     * Valida las instrucciones que reciben únicamente un registro
+     * como operando.
+     *
+     * Este método es utilizado por LOAD, STORE, ADD y SUB.
+     *
+     * @param operacion nombre de la operación que se está validando
+     * @param operando registro recibido por la instrucción
+     * @return descripción del error encontrado, o null si es válido
+     */
+    private String validarOperacionRegistro(
+            String operacion,
+            String operando
+    ) {
+
+        String registro =
+                operando
+                        .trim()
+                        .toUpperCase();
+
+
         if (!REGISTROS.contains(registro)) {
-            return operacion + " debe recibir un registro válido: AX, BX, CX o DX.";
+
+            return operacion
+                    + " debe recibir un registro válido: "
+                    + "AX, BX, CX o DX.";
         }
+
+
         return null;
     }
 }

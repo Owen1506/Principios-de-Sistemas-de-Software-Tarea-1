@@ -17,6 +17,17 @@ import java.awt.*;
 import java.nio.file.Path;
 import java.util.List;
 
+
+/**
+ * Ventana principal de la interfaz gráfica de la Mini PC.
+ *
+ * Permite al usuario configurar la memoria, cargar archivos ASM,
+ * ejecutar instrucciones paso a paso o de forma completa y visualizar
+ * el estado de la CPU, memoria y BCP.
+ *
+ * La interfaz delega la lógica de ejecución al Controlador y se encarga
+ * principalmente de mostrar y actualizar la información del simulador.
+ */
 public class MainWindow extends JFrame {
 
     private Controlador controlador;
@@ -122,10 +133,6 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // CABECERA
-    // =========================================================
-
     private JPanel crearCabecera() {
 
         JPanel contenedor =
@@ -222,10 +229,6 @@ public class MainWindow extends JFrame {
         return contenedor;
     }
 
-
-    // =========================================================
-    // CONFIGURACIÓN
-    // =========================================================
 
     private JPanel crearPanelConfiguracion() {
 
@@ -461,11 +464,6 @@ public class MainWindow extends JFrame {
         return panel;
     }
 
-
-    // =========================================================
-    // MEMORIA
-    // =========================================================
-
     private JPanel crearPanelMemoria() {
 
         JPanel panel =
@@ -556,10 +554,6 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // PANEL DERECHO
-    // =========================================================
-
     private JPanel crearPanelDerecho() {
 
         JPanel panel =
@@ -600,10 +594,6 @@ public class MainWindow extends JFrame {
         return panel;
     }
 
-
-    // =========================================================
-    // CPU
-    // =========================================================
 
     private JPanel crearPanelCPU() {
 
@@ -744,7 +734,13 @@ public class MainWindow extends JFrame {
         return panel;
     }
 
-
+/**
+ * Crea una tarjeta visual para mostrar el valor de un registro.
+ *
+ * @param nombre nombre del registro
+ * @param valor etiqueta donde se mostrará su valor
+ * @return panel correspondiente al registro
+ */
     private JPanel crearTarjetaRegistro(
             String nombre,
             JLabel valor
@@ -824,9 +820,6 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // BCP
-    // =========================================================
 
     private JPanel crearPanelBCP() {
 
@@ -914,9 +907,6 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // EVENTOS
-    // =========================================================
 
     private void agregarEventos() {
 
@@ -942,10 +932,11 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // CONFIGURAR MEMORIA
-    // =========================================================
-
+/**
+ * Configura una nueva instancia del simulador utilizando
+ * el tamaño de memoria y la dirección inicial de usuario
+ * indicados en la interfaz.
+ */
     private void configurarMemoria() {
 
         try {
@@ -1025,10 +1016,10 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // CARGAR ASM
-    // =========================================================
-
+/**
+ * Permite seleccionar un archivo .asm, valida su contenido,
+ * lo convierte en instrucciones y lo carga en memoria.
+ */
     private void cargarArchivo() {
 
         if (controlador == null) {
@@ -1147,10 +1138,10 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // SIGUIENTE
-    // =========================================================
-
+/**
+ * Ejecuta una única instrucción del programa cargado
+ * y actualiza la información mostrada en la interfaz.
+ */
     private void ejecutarSiguiente() {
 
         try {
@@ -1189,11 +1180,10 @@ public class MainWindow extends JFrame {
         }
     }
 
-
-    // =========================================================
-    // EJECUTAR TODO
-    // =========================================================
-
+/**
+ * Ejecuta todas las instrucciones restantes del programa
+ * hasta que este finalice.
+ */
     private void ejecutarTodo() {
 
         try {
@@ -1223,9 +1213,7 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // REINICIAR
-    // =========================================================
+
 
     private void reiniciar() {
 
@@ -1252,10 +1240,10 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // ACTUALIZAR TODO
-    // =========================================================
-
+/**
+ * Actualiza los componentes visuales que muestran
+ * el programa, memoria, CPU y BCP.
+ */
     private void actualizarPantalla() {
 
         mostrarPrograma();
@@ -1266,11 +1254,6 @@ public class MainWindow extends JFrame {
 
         mostrarBCP();
     }
-
-
-    // =========================================================
-    // PROGRAMA
-    // =========================================================
 
     private void mostrarPrograma() {
 
@@ -1347,11 +1330,6 @@ public class MainWindow extends JFrame {
         }
     }
 
-
-    // =========================================================
-    // MEMORIA
-    // =========================================================
-
     private void mostrarMemoria() {
 
         modeloMemoria.setRowCount(0);
@@ -1418,10 +1396,6 @@ public class MainWindow extends JFrame {
     }
 
 
-    // =========================================================
-    // CPU
-    // =========================================================
-
     private void mostrarCPU() {
 
         if (
@@ -1486,10 +1460,6 @@ public class MainWindow extends JFrame {
         );
     }
 
-
-    // =========================================================
-    // BCP
-    // =========================================================
 
     private void mostrarBCP() {
 
@@ -1581,11 +1551,6 @@ public class MainWindow extends JFrame {
         );
     }
 
-
-    // =========================================================
-    // LIMPIEZA
-    // =========================================================
-
     private void limpiarDatos() {
 
         modeloPrograma.setRowCount(0);
@@ -1658,10 +1623,6 @@ public class MainWindow extends JFrame {
         );
     }
 
-
-    // =========================================================
-    // MAIN
-    // =========================================================
 
     public static void main(String[] args) {
 
