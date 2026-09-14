@@ -15,12 +15,7 @@ public class Instruccion {
     private Integer valor;
     private String binario;
 
-    public Instruccion(
-            String operacion,
-            String registro,
-            Integer valor,
-            String binario
-    ) {
+    public Instruccion(String operacion,String registro,Integer valor,String binario) {
         this.operacion = operacion;
         this.registro = registro;
         this.valor = valor;
