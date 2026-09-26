@@ -20,7 +20,7 @@ package minipc.model;
 public class BCP {
 
     private int pid;
-    private String estado;
+    private String estado; //  nuevo, preparado, ejecución, suspendido, en espera y finalizado (7 estados)
 
     // Contexto del CPU
     private int pc;
@@ -37,6 +37,7 @@ public class BCP {
     private int finPrograma;
     private int tamanoPrograma;
 
+    private int prioridad;
 
     /**
      * Crea un nuevo Bloque de Control de Proceso.

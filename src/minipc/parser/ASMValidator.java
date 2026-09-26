@@ -38,7 +38,7 @@ public class ASMValidator {
      * Operaciones admitidas por el lenguaje ASM simplificado.
      */
     private static final List<String> OPERACIONES =
-            List.of("MOV", "LOAD", "STORE", "ADD", "SUB");
+            List.of("MOV", "LOAD", "STORE", "ADD", "SUB", "INT", "SWAP", "PUSH", "POP", "JMP", "JE", "JNE", "CMP", "DEC" ,"INC" , "PARAM");
 
 
     /**
@@ -135,16 +135,23 @@ public class ASMValidator {
         /*
          * Toda operación válida requiere al menos un operando.
          */
-        if (partes.length < 2) {
+        if ( (operacion.equals("INC") || operacion.equals("DEC")) && partes.length == 1){
+        }
+        else if (partes.length < 2) {
 
             return "La instrucción está incompleta.";
         }
 
-
-        String operandos =
-                partes[1].trim();
-
-
+        String operandos = "";
+        if (partes.length == 1){
+                operandos = null;
+        }
+        
+        else if (!partes[1].equals(null)){
+                operandos = partes[1].trim();
+        }
+                
+        
         /*
          * La validación específica depende del tipo de operación.
          */
@@ -152,17 +159,23 @@ public class ASMValidator {
 
             case "MOV":
                 return validarMOV(operandos);
+            case "INT": //
+            case "DEC": //
+            case "INC": //
+            case "PUSH"://
+            case "POP": //
+            case "JMP": //
+            case "JE"://
+            case "JNE": //
+            case "PARAM": //
 
+            case "SWAP": //
+            case "CMP": //
             case "LOAD":
             case "STORE":
             case "ADD":
             case "SUB":
-
-                return validarOperacionRegistro(
-                        operacion,
-                        operandos
-                );
-
+                return validarOperacionRegistro(operacion,operandos);
             default:
                 return "Operación no reconocida.";
         }
@@ -188,58 +201,48 @@ public class ASMValidator {
          * MOV posee dos operandos separados por una coma:
          *
          * registro, valor
+         * registro, registro
          */
-        String[] partes =
-                operandos.split(",");
-
+        String[] partes = operandos.split(",");
 
         if (partes.length != 2) {
-
-            return "MOV debe tener el formato: "
-                    + "MOV REGISTRO, VALOR";
+            return "MOV debe tener el formato: " + "MOV REGISTRO, VALOR o MOV REGISTRO, REGISTRO";
         }
 
+        String registro = partes[0].trim().toUpperCase();
 
-        String registro =
-                partes[0]
-                        .trim()
-                        .toUpperCase();
-
-        String valorTexto =
-                partes[1].trim();
+        String valorTexto = partes[1].trim();
 
 
         // Verificar que el registro exista.
         if (!REGISTROS.contains(registro)) {
 
-            return "Registro no válido: "
-                    + registro;
+            return "Registro no válido: " + registro;
         }
 
+        if (!REGISTROS.contains(valorTexto)){
+                try {
 
-        try {
+                int valor = Integer.parseInt(valorTexto);
 
-            int valor =
-                    Integer.parseInt(valorTexto);
+                /*
+                * El formato entero utilizado por la Mini PC posee:
+                *
+                * 1 bit para el signo.
+                * 7 bits para la magnitud.
+                *
+                * Por esta razón se permite un rango de -127 a 127.
+                */
+                if (valor < -127 || valor > 127) {
 
-            /*
-             * El formato entero utilizado por la Mini PC posee:
-             *
-             * 1 bit para el signo.
-             * 7 bits para la magnitud.
-             *
-             * Por esta razón se permite un rango de -127 a 127.
-             */
-            if (valor < -127 || valor > 127) {
+                        return "El valor debe estar entre -127 y 127.";
+                }
 
-                return "El valor debe estar entre -127 y 127.";
-            }
+                } catch (NumberFormatException e) {
 
-        } catch (NumberFormatException e) {
-
-            return "El valor de MOV debe ser un número entero.";
+                return "El valor de MOV debe ser un número entero o un registro valido.";
+                }
         }
-
 
         // null indica que no se encontró ningún error.
         return null;
@@ -256,25 +259,317 @@ public class ASMValidator {
      * @param operando registro recibido por la instrucción
      * @return descripción del error encontrado, o null si es válido
      */
-    private String validarOperacionRegistro(
-            String operacion,
-            String operando
-    ) {
+    private String validarOperacionRegistro(String operacion,String operando) {
 
-        String registro =
-                operando
-                        .trim()
-                        .toUpperCase();
+        if (operando != null){
+                String registro = operando.trim().toUpperCase();
+                String registro2[] = operando.split(",");
+                if (operacion.equals("SWAP")){
+                        if (registro2.length < 2){
+                                return operacion + " No hay registros o no estan separados por una coma. Ej SWAP AX, BX";
+                        }
+                        else {
+                        if (registro2[0].trim().equals(registro2[1].trim())){
+                                return operacion + " Los registros son los mismos";
+                        }
+                        else if (!REGISTROS.contains(registro2[0].trim()) || !REGISTROS.contains(registro2[1].trim())) {
+                                return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
+                        }
+                }
+                        System.out.println(registro2[1].trim());
+                }
+                else if (operacion.equals("INT")){
 
-
-        if (!REGISTROS.contains(registro)) {
-
-            return operacion
-                    + " debe recibir un registro válido: "
-                    + "AX, BX, CX o DX.";
+                } 
+                else if (!REGISTROS.contains(registro)) {
+                
+                        return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
+                        
+                }
         }
-
-
         return null;
     }
+
+public static void main(String[] args) {
+
+    ASMValidator validator = new ASMValidator();
+
+    /*
+     * Casos de prueba.
+     *
+     * Cada arreglo contiene:
+     * [0] -> descripción de la prueba
+     * [1] -> instrucción ASM
+     */
+    String[][] pruebas = {
+
+        // =====================================================
+        // MOV
+        // =====================================================
+
+        {"MOV con valor inmediato", "MOV BX, 5"},
+        {"MOV con valor negativo", "MOV AX, -25"},
+        {"MOV entre registros", "MOV BX, AX"},
+        {"MOV registro inválido", "MOV ZZ, 5"},
+        {"MOV número fuera de rango", "MOV CX, 200"},
+        {"MOV valor no numérico", "MOV DX, hola"},
+        {"MOV sin segundo operando", "MOV AX"},
+        {"MOV sin operandos", "MOV"},
+
+
+        // =====================================================
+        // LOAD
+        // =====================================================
+
+        {"LOAD válido", "LOAD AX"},
+        {"LOAD registro inválido", "LOAD ZZ"},
+        {"LOAD sin operando", "LOAD"},
+
+
+        // =====================================================
+        // STORE
+        // =====================================================
+
+        {"STORE válido", "STORE BX"},
+        {"STORE registro inválido", "STORE ZZ"},
+        {"STORE sin operando", "STORE"},
+
+
+        // =====================================================
+        // ADD
+        // =====================================================
+
+        {"ADD válido", "ADD CX"},
+        {"ADD registro inválido", "ADD ZZ"},
+        {"ADD sin operando", "ADD"},
+
+
+        // =====================================================
+        // SUB
+        // =====================================================
+
+        {"SUB válido", "SUB DX"},
+        {"SUB registro inválido", "SUB ZZ"},
+        {"SUB sin operando", "SUB"},
+
+
+        // =====================================================
+        // INC
+        // =====================================================
+
+        {"INC sobre AC", "INC"},
+        {"INC sobre registro", "INC AX"},
+        {"INC registro inválido", "INC ZZ"},
+
+
+        // =====================================================
+        // DEC
+        // =====================================================
+
+        {"DEC sobre AC", "DEC"},
+        {"DEC sobre registro", "DEC BX"},
+        {"DEC registro inválido", "DEC ZZ"},
+
+
+        // =====================================================
+        // SWAP
+        // =====================================================
+
+        {"SWAP válido", "SWAP AX, BX"},
+        {"SWAP mismo registro", "SWAP AX, AX"},
+        {"SWAP registro inválido", "SWAP AX, ZZ"},
+        {"SWAP sin coma", "SWAP AX BX"},
+        {"SWAP incompleto", "SWAP AX"},
+        {"SWAP sin operandos", "SWAP"},
+
+
+        // =====================================================
+        // INT
+        // =====================================================
+
+        {"INT finalizar programa", "INT 20H"},
+        {"INT imprimir pantalla", "INT 10H"},
+        {"INT entrada teclado", "INT 09H"},
+        {"INT manejo archivos", "INT 21H"},
+        {"INT inválida", "INT 99H"},
+        {"INT sin operando", "INT"},
+
+
+        // =====================================================
+        // JMP
+        // =====================================================
+
+        {"JMP desplazamiento positivo", "JMP +5"},
+        {"JMP desplazamiento negativo", "JMP -3"},
+        {"JMP sin signo", "JMP 4"},
+        {"JMP valor inválido", "JMP hola"},
+        {"JMP sin desplazamiento", "JMP"},
+
+
+        // =====================================================
+        // CMP
+        // =====================================================
+
+        {"CMP válido", "CMP AX, BX"},
+        {"CMP segundo registro inválido", "CMP AX, ZZ"},
+        {"CMP primer registro inválido", "CMP ZZ, BX"},
+        {"CMP sin coma", "CMP AX BX"},
+        {"CMP incompleto", "CMP AX"},
+        {"CMP sin operandos", "CMP"},
+
+
+        // =====================================================
+        // JE
+        // =====================================================
+
+        {"JE desplazamiento positivo", "JE +3"},
+        {"JE desplazamiento negativo", "JE -2"},
+        {"JE desplazamiento inválido", "JE hola"},
+        {"JE sin desplazamiento", "JE"},
+
+
+        // =====================================================
+        // JNE
+        // =====================================================
+
+        {"JNE desplazamiento positivo", "JNE +4"},
+        {"JNE desplazamiento negativo", "JNE -5"},
+        {"JNE desplazamiento inválido", "JNE hola"},
+        {"JNE sin desplazamiento", "JNE"},
+
+
+        // =====================================================
+        // PARAM
+        // =====================================================
+
+        {"PARAM un valor", "PARAM 5"},
+        {"PARAM dos valores", "PARAM 5, 10"},
+        {"PARAM tres valores", "PARAM 5, 10, 20"},
+        {"PARAM más de tres valores", "PARAM 1, 2, 3, 4"},
+        {"PARAM valor no numérico", "PARAM 5, hola"},
+        {"PARAM sin operandos", "PARAM"},
+
+
+        // =====================================================
+        // PUSH
+        // =====================================================
+
+        {"PUSH válido", "PUSH AX"},
+        {"PUSH registro inválido", "PUSH ZZ"},
+        {"PUSH sin registro", "PUSH"},
+
+
+        // =====================================================
+        // POP
+        // =====================================================
+
+        {"POP válido", "POP BX"},
+        {"POP registro inválido", "POP ZZ"},
+        {"POP sin registro", "POP"},
+
+
+        // =====================================================
+        // OPERACIONES COMPLETAMENTE INVÁLIDAS
+        // =====================================================
+
+        {"Operación inexistente", "MULT AX"},
+        {"Operación inventada", "DIV BX"},
+        {"Solo texto", "HOLA"},
+        {"Línea vacía", ""},
+        {"Solo espacios", "     "}
+    };
+
+
+    System.out.println("==============================================");
+    System.out.println("       PRUEBAS DEL ASM VALIDATOR");
+    System.out.println("==============================================");
+
+
+    int numeroPrueba = 1;
+
+    for (String[] prueba : pruebas) {
+
+        String descripcion = prueba[0];
+        String instruccion = prueba[1];
+        String[] partesInstruccion = instruccion.trim().split("\\s+", 2);
+
+        String operacionPrueba =
+                partesInstruccion.length > 0
+                ? partesInstruccion[0]
+                : "";
+
+        String operandosPrueba =
+                partesInstruccion.length > 1
+                ? partesInstruccion[1]
+                : "";
+
+        System.out.println();
+        System.out.println("----------------------------------------------");
+        System.out.println("PRUEBA #" + numeroPrueba);
+        System.out.println("Caso: " + descripcion);
+        System.out.println("ASM : [" + instruccion + "]");
+        System.out.println("Operacion: " + operacionPrueba);
+        System.out.println("Operando: " + operandosPrueba);
+
+        try {
+
+            /*
+             * Se manda una sola línea por vez.
+             *
+             * Esto permite que si una validación provoca una
+             * excepción, las demás pruebas puedan continuar.
+             */
+            List<String> errores =
+                    validator.validarPrograma(
+                            List.of(instruccion)
+                    );
+
+
+            if (errores.isEmpty()) {
+
+                System.out.println("RESULTADO: VÁLIDA");
+
+            } else {
+
+                System.out.println("RESULTADO: INVÁLIDA");
+
+                for (String error : errores) {
+
+                    System.out.println(
+                            "ERROR: " + error
+                    );
+                }
+            }
+
+        } catch (Exception e) {
+
+            /*
+             * Si el validador falla internamente, se muestra
+             * la excepción para detectar qué caso todavía
+             * necesita ser manejado.
+             */
+            System.out.println(
+                    "RESULTADO: EXCEPCIÓN"
+            );
+
+            System.out.println(
+                    "TIPO: "
+                    + e.getClass().getSimpleName()
+            );
+
+            System.out.println(
+                    "MENSAJE: "
+                    + e.getMessage()
+            );
+        }
+
+        numeroPrueba++;
+    }
+
+
+    System.out.println();
+    System.out.println("==============================================");
+    System.out.println("          FIN DE LAS PRUEBAS");
+    System.out.println("==============================================");
+}
 }

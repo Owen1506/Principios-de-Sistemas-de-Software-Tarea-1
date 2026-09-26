@@ -77,6 +77,20 @@ public class Executor {
             case "SUB":
                 ejecutarSUB(instruccion);
                 break;
+            case "INC": // En este caso esta INC por si solo y INC REGISTRO 
+            case "DEC": // IGUAL QUE INC
+            case "SWAP": // SWAP REGISTRO, REGISTRO
+            case "INT":
+                ejecutarINT(instruccion);
+                break;    
+            //
+            case "JMP": //
+            case "CMP": //
+            case "JE": //
+            case "JNE": //
+            case "PARAM": //
+            case "PUSH": //
+            case "POP": //
 
             default:
                 throw new IllegalArgumentException(
@@ -85,7 +99,123 @@ public class Executor {
         }
     }
 
+    private void ejecutarINC(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
+    private void ejecutarDEC(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
+    private void ejecutarINT(Instruccion instruccion) {
+        String servicio =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
 
+    }
+    private void ejecutarSWAP(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
+    private void ejecutarJMP(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
+    private void ejecutarCMP(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
+    private void ejecutarJE(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
+    private void ejecutarJNE(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
+    private void ejecutarPARAM(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
+    private void ejecutarPUSH(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
+    private void ejecutarPOP(Instruccion instruccion) {
+        String registro =
+                instruccion.getRegistro();
+        int valor =
+                instruccion.getValor();
+        cpu.getRegistros()
+                .modificarRegistro(
+                        registro,
+                        valor
+                );
+    }
     /**
      * Ejecuta una instrucción MOV.
      *
