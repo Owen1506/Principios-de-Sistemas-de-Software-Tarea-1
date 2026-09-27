@@ -31,14 +31,13 @@ public class ASMValidator {
     /**
      * Registros generales permitidos por la Mini PC.
      */
-    private static final List<String> REGISTROS =
-            List.of("AX", "BX", "CX", "DX");
+    private static final List<String> REGISTROS = List.of("AX", "BX", "CX", "DX");
 
+    private static final List<String> SERVICIOS = List.of("21H", "10H", "09H", "20H");
     /**
      * Operaciones admitidas por el lenguaje ASM simplificado.
      */
-    private static final List<String> OPERACIONES =
-            List.of("MOV", "LOAD", "STORE", "ADD", "SUB", "INT", "SWAP", "PUSH", "POP", "JMP", "JE", "JNE", "CMP", "DEC" ,"INC" , "PARAM");
+    private static final List<String> OPERACIONES = List.of("MOV", "LOAD", "STORE", "ADD", "SUB", "INT", "SWAP", "PUSH", "POP", "JMP", "JE", "JNE", "CMP", "DEC" ,"INC" , "PARAM");
 
 
     /**
@@ -269,18 +268,61 @@ public class ASMValidator {
                                 return operacion + " No hay registros o no estan separados por una coma. Ej SWAP AX, BX";
                         }
                         else {
-                        if (registro2[0].trim().equals(registro2[1].trim())){
-                                return operacion + " Los registros son los mismos";
+                                if (registro2[0].trim().equals(registro2[1].trim())){
+                                        return operacion + " Los registros son los mismos";
+                                }
+                                else if (!REGISTROS.contains(registro2[0].trim()) || !REGISTROS.contains(registro2[1].trim())) {
+                                        return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
+                                }
+                        }
+                        
+                }
+                else if (operacion.equals("CMP")){
+                        if (registro2.length < 2){
+                                return operacion + " No hay registros o no estan separados por una coma. Ej SWAP AX, BX";
                         }
                         else if (!REGISTROS.contains(registro2[0].trim()) || !REGISTROS.contains(registro2[1].trim())) {
                                 return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
                         }
-                }
-                        System.out.println(registro2[1].trim());
+                        
                 }
                 else if (operacion.equals("INT")){
-
+                        if (!SERVICIOS.contains(operando)){
+                           return operacion + " debe recibir una llamada de sistema válido: " + "21H, 09H, 20H o 10H.";     
+                        }
                 } 
+                else if (operacion.equals("JMP") || operacion.equals("JE") || operacion.equals("JNE")){
+                        try {
+                                int desplazamiento = Integer.parseInt(operando);
+                                return null;
+
+                        } catch (NumberFormatException e) {
+                                return operacion + " debe recibir un desplazamiento numérico.";
+                        }  
+                }
+                else if (operacion.equals("PARAM")){
+                        if (registro2.length > 3){
+                                return operacion + " Cantidad de parametros no debe ser mayor a 3";
+                        }
+                        if (registro2.length < 1){
+                                return operacion + " Cantidad de parametros no puede ser menor a 1";
+                        }
+                        for (int i = 0; i < registro2.length; i++) {
+
+                                String num = registro2[i].trim();
+
+                                try {
+
+                                Integer.parseInt(num);
+
+                                } catch (NumberFormatException e) {
+
+                                return operacion + " debe recibir como parametro un valor numerico.";
+                                }
+                        }
+                       
+
+                }
                 else if (!REGISTROS.contains(registro)) {
                 
                         return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
