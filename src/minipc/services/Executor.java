@@ -49,8 +49,7 @@ public class Executor {
      */
     public void ejecutar(Instruccion instruccion) {
 
-        String operacion =
-                instruccion.getOperacion();
+        String operacion = instruccion.getOperacion();
 
         /*
          * Se identifica la operación y se delega su ejecución

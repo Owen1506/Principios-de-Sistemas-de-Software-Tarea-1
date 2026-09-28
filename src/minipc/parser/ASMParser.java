@@ -24,7 +24,7 @@ import java.util.List;
  * @author CR TECH
  */
 public class ASMParser {
-
+     private static final List<String> REGISTROS = List.of("AX", "BX", "CX", "DX");
     /**
      * Convierte una lista de líneas ASM en una lista de objetos Instruccion.
      *
@@ -36,8 +36,7 @@ public class ASMParser {
      */
     public List<Instruccion> parsear(List<String> lineas) {
 
-        List<Instruccion> instrucciones =
-                new ArrayList<>();
+        List<Instruccion> instrucciones = new ArrayList<>();
 
         for (String linea : lineas) {
 
@@ -53,9 +52,7 @@ public class ASMParser {
              * Cada línea es transformada en un objeto Instruccion
              * y posteriormente agregada al programa.
              */
-            Instruccion instruccion =
-                    parsearLinea(linea);
-
+            Instruccion instruccion = parsearLinea(linea);
             instrucciones.add(instruccion);
         }
 
@@ -84,7 +81,6 @@ public class ASMParser {
      * @return objeto Instruccion generado a partir de la línea
      */
     private Instruccion parsearLinea(String linea) {
-
         /*
          * Se divide la línea en dos partes:
          *
@@ -98,25 +94,21 @@ public class ASMParser {
          * partes[0] = "MOV"
          * partes[1] = "AX, 5"
          */
-        String[] partes =
-                linea.split("\\s+", 2);
+        String[] partes = linea.split("\\s+", 2);
 
-        String operacion =
-                partes[0].toUpperCase();
-
-        String operandos =
-                partes[1].trim();
-
+        String operacion = partes[0].toUpperCase();
+        String operandos = "";
+        if (partes.length != 1){
+             operandos = partes[1].trim();
+        }
 
         /*
          * Se genera la representación binaria completa
          * de la instrucción.
          */
-        BinaryEncoder encoder =
-                new BinaryEncoder();
+        BinaryEncoder encoder = new BinaryEncoder();
 
-        String binario =
-                encoder.pasarABinario(linea);
+        String binario = "0000 0000 00000000";
 
 
         /*
@@ -127,40 +119,313 @@ public class ASMParser {
          */
         if (operacion.equals("MOV")) {
 
-            String[] partesMOV =
-                    operandos.split(",");
+            String[] partesMOV = operandos.split(",");
+            String registro = partesMOV[0].trim().toUpperCase();
+            String num = partesMOV[1].trim();
+            
+            if (!REGISTROS.contains(num.toUpperCase())){
+                int valor = Integer.parseInt(partesMOV[1].trim());
+                return new Instruccion(operacion,registro,null,null,valor,null,binario);  
+            }
 
-            String registro =
-                    partesMOV[0]
-                            .trim()
-                            .toUpperCase();
+            return new Instruccion(operacion,registro,num,null,null,null,binario);
+        }
 
-            int valor =
-                    Integer.parseInt(
-                            partesMOV[1].trim()
+        else if (operacion.equals("INT")){
+            String[] partesMOV = operandos.split(",");
+            String servicio = partesMOV[0].trim().toUpperCase();
+            
+            return new Instruccion(operacion,null,null,servicio,null,null,binario);
+        }
+        else if (operacion.equals("JMP") || operacion.equals("JE") || operacion.equals("JNE")){
+            String[] partesMOV = operandos.split(",");
+            int valor = Integer.parseInt(partesMOV[0].trim());
+            return new Instruccion(operacion,null,null,null,valor,null,binario);
+        }
+        else if (operacion.equals("INC") || operacion.equals("DEC")){
+            String[] partesMOV = operandos.split(",");
+            String registro = partesMOV[0].trim().toUpperCase();
+            if (partesMOV.length == 1){
+                
+                return new Instruccion(operacion,registro,null,null,1,null,binario);
+            }
+                return new Instruccion(operacion,null,null,null,1,null,binario);
+
+        }
+        else if (operacion.equals("SWAP") || operacion.equals("CMP")){
+            String[] partesMOV = operandos.split(",");
+            String registro = partesMOV[0].trim().toUpperCase();
+            String registro2 = partesMOV[1].trim().toUpperCase();
+            return new Instruccion(operacion,registro,registro2,null,null,null,binario);
+        }
+        else if (operacion.equals("PARAM")){
+            List<Integer> params = new ArrayList<>();
+            String[] parametros = operandos.split(",");
+            for (int i = 0; i < parametros.length; i++){
+                int valor = Integer.parseInt(parametros[i].trim());
+                params.add(valor);
+
+            }
+            return new Instruccion(operacion,null,null,null,null,params,binario);
+        }
+
+        /*
+         * LOAD, STORE, ADD, POP, PUSH, INC, DEC y SUB únicamente requieren
+         * el nombre de un registro.
+         */
+        String registro = operandos.toUpperCase();
+
+        return new Instruccion(operacion,registro,null,null,null,null,binario);
+    }
+public static void main(String[] args) {
+
+    ASMParser parser = new ASMParser();
+
+    /*
+     * Casos de prueba para todas las instrucciones
+     * contempladas por la Mini PC.
+     */
+    String[][] pruebas = {
+
+        // =====================================================
+        // MOV
+        // =====================================================
+
+        {"MOV con valor inmediato", "MOV BX, 5"},
+        {"MOV con valor negativo", "MOV AX, -25"},
+        {"MOV entre registros", "MOV BX, AX"},
+
+
+        // =====================================================
+        // LOAD
+        // =====================================================
+
+        {"LOAD", "LOAD AX"},
+
+
+        // =====================================================
+        // STORE
+        // =====================================================
+
+        {"STORE", "STORE BX"},
+
+
+        // =====================================================
+        // ADD
+        // =====================================================
+
+        {"ADD", "ADD CX"},
+
+
+        // =====================================================
+        // SUB
+        // =====================================================
+
+        {"SUB", "SUB DX"},
+
+
+        // =====================================================
+        // INC
+        // =====================================================
+
+        {"INC sobre AC", "INC"},
+        {"INC sobre registro", "INC AX"},
+
+
+        // =====================================================
+        // DEC
+        // =====================================================
+
+        {"DEC sobre AC", "DEC"},
+        {"DEC sobre registro", "DEC BX"},
+
+
+        // =====================================================
+        // SWAP
+        // =====================================================
+
+        {"SWAP", "SWAP AX, BX"},
+
+
+        // =====================================================
+        // INT
+        // =====================================================
+
+        {"INT finalizar programa", "INT 20H"},
+        {"INT imprimir pantalla", "INT 10H"},
+        {"INT entrada teclado", "INT 09H"},
+        {"INT manejo archivos", "INT 21H"},
+
+
+        // =====================================================
+        // JMP
+        // =====================================================
+
+        {"JMP positivo", "JMP +5"},
+        {"JMP negativo", "JMP -3"},
+
+
+        // =====================================================
+        // CMP
+        // =====================================================
+
+        {"CMP", "CMP AX, BX"},
+
+
+        // =====================================================
+        // JE
+        // =====================================================
+
+        {"JE positivo", "JE +3"},
+        {"JE negativo", "JE -2"},
+
+
+        // =====================================================
+        // JNE
+        // =====================================================
+
+        {"JNE positivo", "JNE +4"},
+        {"JNE negativo", "JNE -5"},
+
+
+        // =====================================================
+        // PARAM
+        // =====================================================
+
+        {"PARAM un valor", "PARAM 5"},
+        {"PARAM dos valores", "PARAM 5, 10"},
+        {"PARAM tres valores", "PARAM 5, 10, 20"},
+
+
+        // =====================================================
+        // PUSH
+        // =====================================================
+
+        {"PUSH", "PUSH AX"},
+
+
+        // =====================================================
+        // POP
+        // =====================================================
+
+        {"POP", "POP BX"},
+
+
+        // =====================================================
+        // LÍNEAS VACÍAS
+        // =====================================================
+
+        {"Línea vacía", ""},
+        {"Solo espacios", "     "}
+    };
+
+
+    System.out.println("==============================================");
+    System.out.println("          PRUEBAS DEL ASM PARSER");
+    System.out.println("==============================================");
+
+
+    int numeroPrueba = 1;
+
+    for (String[] prueba : pruebas) {
+
+        String descripcion = prueba[0];
+        String instruccionASM = prueba[1];
+
+
+        /*
+         * Separación solamente para mostrar en consola
+         * qué operación y operandos se están probando.
+         */
+        String[] partes =
+                instruccionASM.trim().split("\\s+", 2);
+
+        String operacion =
+                partes.length > 0
+                ? partes[0]
+                : "";
+
+        String operandos =
+                partes.length > 1
+                ? partes[1]
+                : "";
+
+
+        System.out.println();
+        System.out.println("----------------------------------------------");
+        System.out.println("PRUEBA #" + numeroPrueba);
+        System.out.println("Caso: " + descripcion);
+        System.out.println("ASM: [" + instruccionASM + "]");
+        System.out.println("Operacion: " + operacion);
+        System.out.println("Operandos: " + operandos);
+
+
+        try {
+
+            /*
+             * Se manda una única instrucción al parser.
+             */
+            List<Instruccion> resultado = parser.parsear(List.of(instruccionASM)
                     );
 
-            return new Instruccion(
-                    operacion,
-                    registro,
-                    valor,
-                    binario
+
+            /*
+             * Una línea vacía debe ser ignorada,
+             * por lo que la lista estará vacía.
+             */
+            if (resultado.isEmpty()) {
+
+                System.out.println("RESULTADO: LÍNEA IGNORADA");
+
+            } else {
+
+                System.out.println("RESULTADO: PARSEO CORRECTO");
+
+                /*
+                 * Muestra el objeto Instruccion creado.
+                 *
+                 * Para que esto muestre sus atributos correctamente,
+                 * Instruccion debería tener implementado toString().
+                 */
+                Instruccion instruccion =
+                        resultado.get(0);
+
+                System.out.println(
+                        "Objeto generado: "
+                        + instruccion
+                );
+            }
+
+        } catch (Exception e) {
+
+            /*
+             * Si todavía no está implementado correctamente
+             * algún tipo de instrucción, se muestra la excepción
+             * y las demás pruebas continúan.
+             */
+            System.out.println(
+                    "RESULTADO: ERROR AL PARSEAR"
+            );
+
+            System.out.println(
+                    "TIPO: "
+                    + e.getClass().getSimpleName()
+            );
+
+            System.out.println(
+                    "MENSAJE: "
+                    + e.getMessage()
             );
         }
 
 
-        /*
-         * LOAD, STORE, ADD y SUB únicamente requieren
-         * el nombre de un registro.
-         */
-        String registro =
-                operandos.toUpperCase();
-
-        return new Instruccion(
-                operacion,
-                registro,
-                null,
-                binario
-        );
+        numeroPrueba++;
     }
+
+
+    System.out.println();
+    System.out.println("==============================================");
+    System.out.println("          FIN DE LAS PRUEBAS");
+    System.out.println("==============================================");
+}
 }

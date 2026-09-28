@@ -113,11 +113,9 @@ public class ASMValidator {
          * partes[0] = "MOV"
          * partes[1] = "AX, 5"
          */
-        String[] partes =
-                linea.split("\\s+", 2);
+        String[] partes = linea.split("\\s+", 2);
 
-        String operacion =
-                partes[0].toUpperCase();
+        String operacion = partes[0].toUpperCase();
 
 
         /*
