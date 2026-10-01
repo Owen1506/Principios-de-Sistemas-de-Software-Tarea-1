@@ -33,6 +33,8 @@ public class Instruccion {
     private Integer valor; // Para movimientos inmediatos y desplazamientos
     private List<Integer> parametros; // Para operaciones como PARAM
     private String binario;
+    private String texto;
+    private int peso;
 
     /**
      * Crea una nueva instrucción con todos los datos necesarios
@@ -46,16 +48,7 @@ public class Instruccion {
      * @param parametros lista de parámetros numéricos; puede ser null si no aplica
      * @param binario representación binaria completa de la instrucción
      */
-    public Instruccion(
-            String operacion,
-            String registro,
-            String registro2,
-            String servicio,
-            Integer valor,
-            List<Integer> parametros,
-            String binario
-    ) {
-
+    public Instruccion(String operacion,String registro,String registro2,String servicio,Integer valor,List<Integer> parametros,String binario,String texto, int peso) {
         this.operacion = operacion;
         this.registro = registro;
         this.registro2 = registro2;
@@ -63,6 +56,8 @@ public class Instruccion {
         this.valor = valor;
         this.parametros = parametros;
         this.binario = binario;
+        this.texto = "";
+        this.peso = 0;
     }
 
     /**
@@ -128,6 +123,14 @@ public class Instruccion {
         return binario;
     }
 
+    public String getTexto() {
+        return texto;
+    }
+
+    public int getPeso() {
+        return peso;
+    }
+
     /**
      * Genera una representación textual de la instrucción
      * mostrando todos sus atributos.
@@ -142,6 +145,8 @@ public class Instruccion {
                 ", registro2='" + registro2 + '\'' +
                 ", servicio='" + servicio + '\'' +
                 ", valor=" + valor +
+                ", texto='" + texto + '\'' +
+                ", peso=" + peso +
                 ", parametros=" + parametros +
                 ", binario='" + binario + '\'' +
                 '}';

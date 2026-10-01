@@ -1,5 +1,7 @@
 package minipc.model;
 
+import java.time.LocalDateTime;
+
 /**
  * Representa el Bloque de Control de Proceso (BCP) de un programa
  * cargado en la Mini PC.
@@ -20,7 +22,7 @@ package minipc.model;
 public class BCP {
 
     private int pid;
-    private String estado; //  nuevo, preparado, ejecución, suspendido, en espera y finalizado (7 estados)
+    private EstadoProceso estado; //  nuevo, preparado, ejecución, suspendido, en espera y finalizado (7 estados)
 
     // Contexto del CPU
     private int pc;
@@ -30,7 +32,11 @@ public class BCP {
     private int ax;
     private int bx;
     private int cx;
-    private int dx;
+
+    private String dx;
+
+    private String ah;
+    private String al;
 
     // Información del programa en memoria
     private int inicioPrograma;
@@ -38,7 +44,14 @@ public class BCP {
     private int tamanoPrograma;
 
     private int prioridad;
+    private PilaProceso pila;
+    private int direccionBCP;
+    private int direccionSiguienteBCP;
+    private LocalDateTime horaInicio;
+    private LocalDateTime horaFinal;
 
+    private int tiempoCPU;
+    
     /**
      * Crea un nuevo Bloque de Control de Proceso.
      *
@@ -53,14 +66,9 @@ public class BCP {
      * @param tamanoPrograma cantidad de posiciones de memoria ocupadas
      *        por el programa
      */
-    public BCP(
-            int pid,
-            int inicioPrograma,
-            int tamanoPrograma
-    ) {
-
+    public BCP(int pid,int inicioPrograma,int tamanoPrograma) {
         this.pid = pid;
-        this.estado = "NUEVO";
+        this.estado = EstadoProceso.NUEVO;
 
         this.pc = inicioPrograma;
         this.ir = "";
@@ -69,18 +77,20 @@ public class BCP {
         this.ax = 0;
         this.bx = 0;
         this.cx = 0;
-        this.dx = 0;
+        this.dx = "0";
+        this.ah = "";
+        this.al = "";
 
         this.inicioPrograma = inicioPrograma;
         this.tamanoPrograma = tamanoPrograma;
+        this.pila = new PilaProceso();
 
         /*
          * La dirección final del programa se calcula tomando
          * la dirección inicial y la cantidad de posiciones
          * ocupadas por el programa.
          */
-        this.finPrograma =
-                inicioPrograma + tamanoPrograma - 1;
+        this.finPrograma = inicioPrograma + tamanoPrograma - 1;
     }
 
 
@@ -104,7 +114,11 @@ public class BCP {
         this.ax = cpu.getRegistros().getAX();
         this.bx = cpu.getRegistros().getBX();
         this.cx = cpu.getRegistros().getCX();
+
         this.dx = cpu.getRegistros().getDX();
+
+        this.ah = cpu.getRegistros().getAH();
+        this.al = cpu.getRegistros().getAL();
     }
 
 
@@ -126,7 +140,11 @@ public class BCP {
         cpu.getRegistros().setAX(this.ax);
         cpu.getRegistros().setBX(this.bx);
         cpu.getRegistros().setCX(this.cx);
+
         cpu.getRegistros().setDX(this.dx);
+
+        cpu.getRegistros().setAH(this.ah);
+        cpu.getRegistros().setAL(this.al);
     }
 
 
@@ -148,7 +166,7 @@ public class BCP {
      *
      * @return estado actual del proceso
      */
-    public String getEstado() {
+    public EstadoProceso getEstado() {
         return estado;
     }
 
@@ -158,7 +176,7 @@ public class BCP {
      *
      * @param estado nuevo estado del proceso
      */
-    public void setEstado(String estado) {
+    public void setEstado(EstadoProceso estado) {
         this.estado = estado;
     }
 
@@ -228,9 +246,18 @@ public class BCP {
      *
      * @return valor de DX
      */
-    public int getDX() {
+    public String getDX() {
         return dx;
     }
+
+
+    public String getAH() {
+        return ah;
+    }
+
+    public String getAL() {
+        return al;
+    }   
 
 
     /**

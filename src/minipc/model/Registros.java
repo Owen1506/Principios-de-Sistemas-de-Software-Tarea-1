@@ -1,7 +1,7 @@
 package minipc.model;
 
 /**
- * Administra los registros generales AX, BX, CX y DX
+ * Administra los registros generales AX, BX, CX y DX y AH, AL
  * utilizados por la CPU de la Mini PC.
  *
  * Permite consultar, modificar y reiniciar el valor de cada registro,
@@ -9,10 +9,13 @@ package minipc.model;
  */
 public class Registros {
 
-    private int ax;
+    private int ax; // Para este archivo se debe hacer parte baja y alta pero no como tal su representacion como seria en un ambiente ensamblador sino que unicamente algo simulado.
+
     private int bx;
     private int cx;
-    private int dx;
+    private String dx; // Ya que se podran hacer movimientos a dx como MOV DX, "prueba" y posteriormente interrupcion para manejo de archivos.
+    private String al;
+    private String ah;
 
 
     /**
@@ -23,7 +26,9 @@ public class Registros {
         this.ax = 0;
         this.bx = 0;
         this.cx = 0;
-        this.dx = 0;
+        this.dx = "0";
+        this.al = "";
+        this.ah = "";
     }
 
 
@@ -92,21 +97,59 @@ public class Registros {
      *
      * @return valor almacenado en DX
      */
-    public int getDX() {
+    public String getDX() {
         return dx;
     }
-
-
     /**
      * Modifica el valor almacenado en el registro DX.
      *
      * @param valor nuevo valor para DX
      */
-    public void setDX(int valor) {
+    public void setDX(String valor) {
         this.dx = valor;
+    }
+    public void setDX(int valor) {
+        this.dx = String.valueOf(valor);
+    }
+
+    public boolean dxEsNumerico() {
+        try {
+            Integer.parseInt(dx);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    public int getDXComoEntero() {
+
+        try {
+            return Integer.parseInt(dx);
+
+        } catch (NumberFormatException e) {
+
+            throw new IllegalStateException(
+                "DX no contiene un valor numérico: " + dx
+            );
+        }
     }
 
 
+    public String getAH() {
+        return ah;
+    }
+
+    public void setAH(String ah) {
+        this.ah = ah.toUpperCase();
+    }
+
+    public String getAL() {
+        return al;
+    }
+
+    public void setAL(String al) {
+        this.al = al;
+    }
     /**
      * Obtiene el valor de un registro general a partir de su nombre.
      *
@@ -117,32 +160,79 @@ public class Registros {
      * @return valor almacenado en el registro solicitado
      * @throws IllegalArgumentException si el registro no es AX, BX, CX o DX
      */
-    public int obtenerRegistro(String nombreRegistro) {
+  //  public int obtenerRegistro(String nombreRegistro) {
 
-        nombreRegistro = nombreRegistro.toUpperCase();
+    //    nombreRegistro = nombreRegistro.toUpperCase();
 
-        switch (nombreRegistro) {
+    //    switch (nombreRegistro) {
 
-            case "AX":
-                return getAX();
+    //        case "AX":
+    //            return getAX();
 
-            case "BX":
-                return getBX();
+    //        case "BX":
+    //            return getBX();
 
-            case "CX":
-                return getCX();
+     //       case "CX":
+       //         return getCX();
+//
+            //case "DX": 
+            //    return getDX(); Cambiar esto y en el executor.java nada mas llamar al respectivo getDX
 
-            case "DX":
-                return getDX();
+        //    default:
+       //         throw new IllegalArgumentException(
+       //                 "Nombre de registro inválido: " + nombreRegistro
+      //          );
+     //  }
+   // }
 
-            default:
-                throw new IllegalArgumentException(
-                        "Nombre de registro inválido: " + nombreRegistro
-                );
-        }
+public int obtenerRegistroNumerico(String nombreRegistro) {
+
+    switch (nombreRegistro.toUpperCase()) {
+
+        case "AX":
+            return ax;
+
+        case "BX":
+            return bx;
+
+        case "CX":
+            return cx;
+
+        case "DX":
+            return getDXComoEntero();
+
+        default:
+            throw new IllegalArgumentException(
+                "Registro inválido: " + nombreRegistro
+            );
     }
+}
+public String obtenerRegistroTexto(String nombreRegistro) {
 
+    switch (nombreRegistro.toUpperCase()) {
 
+        case "AX":
+            return String.valueOf(ax);
+
+        case "BX":
+            return String.valueOf(bx);
+
+        case "CX":
+            return String.valueOf(cx);
+
+        case "DX":
+            return dx;
+        case "AL":
+            return al;
+        case "AH":
+            return ah;
+
+        default:
+            throw new IllegalArgumentException(
+                "Registro inválido: " + nombreRegistro
+            );
+    }
+}
     /**
      * Modifica el valor de un registro general a partir de su nombre.
      *
@@ -150,10 +240,7 @@ public class Registros {
      * @param valor nuevo valor que se almacenará en el registro
      * @throws IllegalArgumentException si el registro no es AX, BX, CX o DX
      */
-    public void modificarRegistro(
-            String nombreRegistro,
-            int valor
-    ) {
+    public void modificarRegistroNumerico(String nombreRegistro,int valor) {
 
         nombreRegistro = nombreRegistro.toUpperCase();
 
@@ -192,6 +279,8 @@ public class Registros {
         setBX(0);
         setCX(0);
         setDX(0);
+        setAL("");
+        setAH("");
     }
 
 
@@ -207,6 +296,8 @@ public class Registros {
         return "AX=" + getAX()
                 + " BX=" + getBX()
                 + " CX=" + getCX()
-                + " DX=" + getDX();
+                + " DX=" + getDX()
+                + " AH=" + getAH()
+                + " AL=" + getAL();
     }
 }

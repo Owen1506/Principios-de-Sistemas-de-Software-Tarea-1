@@ -31,9 +31,10 @@ public class ASMValidator {
     /**
      * Registros generales permitidos por la Mini PC.
      */
-    private static final List<String> REGISTROS = List.of("AX", "BX", "CX", "DX");
+    private static final List<String> REGISTROS = List.of("AX", "BX", "CX", "DX","AH","AL");
 
     private static final List<String> SERVICIOS = List.of("21H", "10H", "09H", "20H");
+    private static final List<String> VALORESAH = List.of("3CH","3DH","4DH","40H","41H");
     /**
      * Operaciones admitidas por el lenguaje ASM simplificado.
      */
@@ -217,7 +218,11 @@ public class ASMValidator {
             return "Registro no válido: " + registro;
         }
 
-        if (!REGISTROS.contains(valorTexto)){
+        if (registro.equals("DX") || registro.equals("AH") || registro.equals("AL")){
+
+        }
+
+        else if (!REGISTROS.contains(valorTexto)){
                 try {
 
                 int valor = Integer.parseInt(valorTexto);
@@ -257,11 +262,16 @@ public class ASMValidator {
      * @return descripción del error encontrado, o null si es válido
      */
     private String validarOperacionRegistro(String operacion,String operando) {
-
         if (operando != null){
                 String registro = operando.trim().toUpperCase();
                 String registro2[] = operando.split(",");
-                if (operacion.equals("SWAP")){
+                if (operando.equals("AH") || operando.equals("AL")){
+                        if (!operacion.equals("MOV")){
+                                return operacion + " AH y AL solo pueden ser modificados por MOV";
+                        }
+                }
+                
+                else if (operacion.equals("SWAP")){
                         if (registro2.length < 2){
                                 return operacion + " No hay registros o no estan separados por una coma. Ej SWAP AX, BX";
                         }
@@ -273,7 +283,6 @@ public class ASMValidator {
                                         return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
                                 }
                         }
-                        
                 }
                 else if (operacion.equals("CMP")){
                         if (registro2.length < 2){
