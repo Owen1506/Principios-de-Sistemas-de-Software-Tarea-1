@@ -1,6 +1,8 @@
 package minipc.model;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Representa el Bloque de Control de Proceso (BCP) de un programa
@@ -13,18 +15,22 @@ import java.time.LocalDateTime;
  * - Estado actual del proceso.
  * - Contexto de ejecución de la CPU.
  * - Valores de los registros generales.
+ * - Pila del proceso.
  * - Ubicación y tamaño del programa en memoria.
+ * - Prioridad.
+ * - Información de tiempo.
+ * - Archivos abiertos.
+ * - Dirección del BCP y enlace al siguiente BCP.
  *
  * También permite guardar el contexto actual de la CPU y restaurarlo
- * posteriormente, lo cual sirve como base para futuros mecanismos de
- * cambio de contexto entre procesos.
+ * posteriormente para realizar cambios de contexto entre procesos.
  */
 public class BCP {
 
     private int pid;
-    private EstadoProceso estado; //  nuevo, preparado, ejecución, suspendido, en espera y finalizado (7 estados)
+    private EstadoProceso estado;
 
-    // Contexto del CPU
+    // Contexto de CPU
     private int pc;
     private String ir;
     private int ac;
@@ -34,7 +40,6 @@ public class BCP {
     private int cx;
 
     private String dx;
-
     private String ah;
     private String al;
 
@@ -43,30 +48,34 @@ public class BCP {
     private int finPrograma;
     private int tamanoPrograma;
 
+    // Información del proceso
     private int prioridad;
     private PilaProceso pila;
+
+    // Ubicación del BCP dentro del área del sistema
     private int direccionBCP;
     private int direccionSiguienteBCP;
+
+    // Información contable
     private LocalDateTime horaInicio;
     private LocalDateTime horaFinal;
-
     private int tiempoCPU;
-    
+
+    // Archivos abiertos por el proceso
+    private List<String> archivosAbiertos;
+
+    private boolean zeroFlag;
+
+
     /**
      * Crea un nuevo Bloque de Control de Proceso.
-     *
-     * El proceso inicia con estado NUEVO y con los registros
-     * inicializados en cero.
-     *
-     * El PC se inicializa en la primera dirección de memoria
-     * asignada al programa.
      *
      * @param pid identificador único del proceso
      * @param inicioPrograma dirección inicial del programa en memoria
      * @param tamanoPrograma cantidad de posiciones de memoria ocupadas
-     *        por el programa
      */
-    public BCP(int pid,int inicioPrograma,int tamanoPrograma) {
+    public BCP(int pid, int inicioPrograma, int tamanoPrograma) {
+
         this.pid = pid;
         this.estado = EstadoProceso.NUEVO;
 
@@ -83,25 +92,25 @@ public class BCP {
 
         this.inicioPrograma = inicioPrograma;
         this.tamanoPrograma = tamanoPrograma;
+        this.finPrograma = inicioPrograma + tamanoPrograma - 1;
+
+        this.prioridad = 0;
         this.pila = new PilaProceso();
 
-        /*
-         * La dirección final del programa se calcula tomando
-         * la dirección inicial y la cantidad de posiciones
-         * ocupadas por el programa.
-         */
-        this.finPrograma = inicioPrograma + tamanoPrograma - 1;
-    }
+        this.direccionBCP = -1;
+        this.direccionSiguienteBCP = -1;
 
+        this.horaInicio = null;
+        this.horaFinal = null;
+        this.tiempoCPU = 0;
+
+        this.archivosAbiertos = new ArrayList<>();
+
+        this.zeroFlag = false;
+    }
 
     /**
      * Guarda dentro del BCP una copia del contexto actual de la CPU.
-     *
-     * Se almacenan el PC, IR, AC y los registros generales
-     * AX, BX, CX y DX.
-     *
-     * Este método permite conservar el estado de ejecución del proceso
-     * para que pueda ser restaurado posteriormente.
      *
      * @param cpu CPU cuyo contexto será almacenado
      */
@@ -110,195 +119,178 @@ public class BCP {
         this.pc = cpu.getPC();
         this.ir = cpu.getIR();
         this.ac = cpu.getAC();
-
+        this.zeroFlag = cpu.isZeroFlag();
         this.ax = cpu.getRegistros().getAX();
         this.bx = cpu.getRegistros().getBX();
         this.cx = cpu.getRegistros().getCX();
 
         this.dx = cpu.getRegistros().getDX();
-
         this.ah = cpu.getRegistros().getAH();
         this.al = cpu.getRegistros().getAL();
+
     }
 
-
     /**
-     * Restaura en una CPU el contexto previamente almacenado
-     * dentro del BCP.
+     * Restaura en una CPU el contexto almacenado dentro del BCP.
      *
-     * Se restauran el PC, IR, AC y los registros generales
-     * AX, BX, CX y DX.
-     *
-     * @param cpu CPU donde será restaurado el contexto del proceso
+     * @param cpu CPU donde será restaurado el contexto
      */
     public void restaurarContexto(CPU cpu) {
 
         cpu.setPC(this.pc);
         cpu.setIR(this.ir);
         cpu.setAC(this.ac);
-
+        cpu.setZeroFlag(this.zeroFlag);
         cpu.getRegistros().setAX(this.ax);
         cpu.getRegistros().setBX(this.bx);
         cpu.getRegistros().setCX(this.cx);
 
         cpu.getRegistros().setDX(this.dx);
-
         cpu.getRegistros().setAH(this.ah);
         cpu.getRegistros().setAL(this.al);
     }
 
-
-    /**
-     * Obtiene el identificador del proceso.
-     *
-     * @return PID del proceso
-     */
     public int getPid() {
         return pid;
     }
 
-
-    /**
-     * Obtiene el estado actual del proceso.
-     *
-     * Algunos estados utilizados por el simulador son:
-     * NUEVO, LISTO, EJECUTANDO y FINALIZADO.
-     *
-     * @return estado actual del proceso
-     */
     public EstadoProceso getEstado() {
         return estado;
     }
 
-
-    /**
-     * Modifica el estado actual del proceso.
-     *
-     * @param estado nuevo estado del proceso
-     */
     public void setEstado(EstadoProceso estado) {
         this.estado = estado;
     }
 
-
-    /**
-     * Obtiene el Program Counter almacenado en el contexto del proceso.
-     *
-     * @return valor del PC almacenado
-     */
     public int getPC() {
         return pc;
     }
 
-
-    /**
-     * Obtiene el Instruction Register almacenado en el contexto.
-     *
-     * @return contenido del IR almacenado
-     */
     public String getIR() {
         return ir;
     }
 
-
-    /**
-     * Obtiene el valor del acumulador almacenado en el contexto.
-     *
-     * @return valor del AC
-     */
     public int getAC() {
         return ac;
     }
 
-
-    /**
-     * Obtiene el valor almacenado del registro AX.
-     *
-     * @return valor de AX
-     */
     public int getAX() {
         return ax;
     }
 
-
-    /**
-     * Obtiene el valor almacenado del registro BX.
-     *
-     * @return valor de BX
-     */
     public int getBX() {
         return bx;
     }
 
-
-    /**
-     * Obtiene el valor almacenado del registro CX.
-     *
-     * @return valor de CX
-     */
     public int getCX() {
         return cx;
     }
 
-
-    /**
-     * Obtiene el valor almacenado del registro DX.
-     *
-     * @return valor de DX
-     */
     public String getDX() {
         return dx;
     }
 
-
+    public void setDX(String dx) {
+        this.dx = dx;
+    }
+    
     public String getAH() {
         return ah;
     }
 
     public String getAL() {
         return al;
-    }   
+    }
+    
+    public boolean isZeroFlag() {
+        return zeroFlag;
+    }
 
-
-    /**
-     * Obtiene la primera dirección de memoria ocupada por el programa.
-     *
-     * @return dirección inicial del programa
-     */
     public int getInicioPrograma() {
         return inicioPrograma;
     }
 
-
-    /**
-     * Obtiene la última dirección de memoria ocupada por el programa.
-     *
-     * @return dirección final del programa
-     */
     public int getFinPrograma() {
         return finPrograma;
     }
 
-
-    /**
-     * Obtiene la cantidad de posiciones de memoria ocupadas
-     * por el programa.
-     *
-     * @return tamaño del programa
-     */
     public int getTamanoPrograma() {
         return tamanoPrograma;
     }
 
+    public int getPrioridad() {
+        return prioridad;
+    }
+
+    public void setPrioridad(int prioridad) {
+        this.prioridad = prioridad;
+    }
+
+    public PilaProceso getPila() {
+        return pila;
+    }
+
+    public int getDireccionBCP() {
+        return direccionBCP;
+    }
+
+    public void setDireccionBCP(int direccionBCP) {
+        this.direccionBCP = direccionBCP;
+    }
+
+    public int getDireccionSiguienteBCP() {
+        return direccionSiguienteBCP;
+    }
+
+    public void setDireccionSiguienteBCP(int direccionSiguienteBCP) {
+        this.direccionSiguienteBCP = direccionSiguienteBCP;
+    }
+
+    public LocalDateTime getHoraInicio() {
+        return horaInicio;
+    }
+
+    public void setHoraInicio(LocalDateTime horaInicio) {
+        this.horaInicio = horaInicio;
+    }
+
+    public LocalDateTime getHoraFinal() {
+        return horaFinal;
+    }
+
+    public void setHoraFinal(LocalDateTime horaFinal) {
+        this.horaFinal = horaFinal;
+    }
+
+    public int getTiempoCPU() {
+        return tiempoCPU;
+    }
 
     /**
-     * Genera una representación textual del estado actual del BCP.
+     * Incrementa un segundo simulado de uso de CPU.
      *
-     * Incluye el PID, estado, contexto de CPU, registros generales
-     * e información del programa en memoria.
-     *
-     * @return cadena con la información completa del BCP
+     * Se deberá llamar cuando el proceso esté en ejecución
+     * y se produzca un tick/clic del botón Siguiente.
      */
+    public void incrementarTiempoCPU() {
+        tiempoCPU++;
+    }
+
+    public List<String> getArchivosAbiertos() {
+        return archivosAbiertos;
+    }
+
+    public void agregarArchivoAbierto(String nombreArchivo) {
+
+        if (!archivosAbiertos.contains(nombreArchivo)) {
+            archivosAbiertos.add(nombreArchivo);
+        }
+    }
+
+    public void cerrarArchivo(String nombreArchivo) {
+        archivosAbiertos.remove(nombreArchivo);
+    }
+
     @Override
     public String toString() {
 
@@ -307,12 +299,23 @@ public class BCP {
                 + "\nPC=" + pc
                 + "\nIR=" + ir
                 + "\nAC=" + ac
+                + "\nZeroFlag=" + zeroFlag
                 + "\nAX=" + ax
                 + " BX=" + bx
                 + " CX=" + cx
                 + " DX=" + dx
+                + " AH=" + ah
+                + " AL=" + al
                 + "\nInicio programa=" + inicioPrograma
                 + "\nFin programa=" + finPrograma
-                + "\nTamaño programa=" + tamanoPrograma;
+                + "\nTamano programa=" + tamanoPrograma
+                + "\nPrioridad=" + prioridad
+                + "\nDireccion BCP=" + direccionBCP
+                + "\nDireccion siguiente BCP=" + direccionSiguienteBCP
+                + "\nPila=" + pila
+                + "\nTiempo CPU=" + tiempoCPU
+                + "\nHora inicio=" + horaInicio
+                + "\nHora final=" + horaFinal
+                + "\nArchivos abiertos=" + archivosAbiertos;
     }
 }

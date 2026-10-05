@@ -14,31 +14,30 @@ package minipc.model;
  * - AC (Accumulator): registro acumulador utilizado por operaciones
  *   aritméticas y de transferencia.
  *
- * - Registros generales: AX, BX, CX y DX.
+ * - Registros generales: AX, BX, CX, DX, AH y AL.
+ *
+ * - Zero Flag: indica el resultado de una comparación realizada
+ *   mediante CMP.
  */
 public class CPU {
 
     private int pc;
     private String ir;
     private int ac;
+    private boolean zeroFlag;
 
     private Registros registros;
 
-
     /**
      * Crea una nueva CPU e inicializa todos sus componentes.
-     *
-     * El contador de programa y el acumulador inician en cero,
-     * el registro de instrucción inicia vacío y se crea un nuevo
-     * conjunto de registros generales.
      */
     public CPU() {
         this.pc = 0;
         this.ir = "";
         this.ac = 0;
+        this.zeroFlag = false;
         this.registros = new Registros();
     }
-
 
     /**
      * Obtiene el valor actual del Program Counter.
@@ -49,7 +48,6 @@ public class CPU {
         return pc;
     }
 
-
     /**
      * Modifica el valor del Program Counter.
      *
@@ -58,7 +56,6 @@ public class CPU {
     public void setPC(int pc) {
         this.pc = pc;
     }
-
 
     /**
      * Obtiene el contenido actual del Instruction Register.
@@ -69,7 +66,6 @@ public class CPU {
         return ir;
     }
 
-
     /**
      * Modifica el contenido del Instruction Register.
      *
@@ -78,7 +74,6 @@ public class CPU {
     public void setIR(String ir) {
         this.ir = ir;
     }
-
 
     /**
      * Obtiene el valor actual del acumulador.
@@ -89,7 +84,6 @@ public class CPU {
         return ac;
     }
 
-
     /**
      * Modifica el valor almacenado en el acumulador.
      *
@@ -99,55 +93,62 @@ public class CPU {
         this.ac = ac;
     }
 
+    /**
+     * Obtiene el estado actual del Zero Flag.
+     *
+     * @return true si la última comparación produjo igualdad
+     */
+    public boolean isZeroFlag() {
+        return zeroFlag;
+    }
 
     /**
-     * Obtiene el conjunto de registros generales de la CPU.
+     * Modifica el estado del Zero Flag.
      *
-     * @return objeto que contiene los registros AX, BX, CX y DX
+     * @param zeroFlag nuevo estado del Zero Flag
+     */
+    public void setZeroFlag(boolean zeroFlag) {
+        this.zeroFlag = zeroFlag;
+    }
+
+    /**
+     * Obtiene el conjunto de registros de la CPU.
+     *
+     * @return objeto que contiene AX, BX, CX, DX, AH y AL
      */
     public Registros getRegistros() {
         return registros;
     }
 
-
     /**
      * Incrementa el Program Counter en una posición.
-     *
-     * Se utiliza después de ejecutar una instrucción para avanzar
-     * hacia la siguiente posición de memoria.
      */
     public void incrementarPC() {
         this.pc++;
     }
 
-
     /**
      * Reinicia el estado completo de la CPU.
-     *
-     * El PC y el AC vuelven a cero, el IR queda vacío y todos los
-     * registros generales se reinician también a cero.
      */
     public void reiniciarCPU() {
         this.pc = 0;
         this.ir = "";
         this.ac = 0;
+        this.zeroFlag = false;
         this.registros.reiniciarRegistros();
     }
 
-
     /**
      * Genera una representación textual del estado actual de la CPU.
-     *
-     * Incluye el contenido de PC, IR, AC y los registros generales.
      *
      * @return cadena con el estado actual de la CPU
      */
     @Override
     public String toString() {
-
         return "PC=" + pc
                 + "\nIR=" + ir
                 + "\nAC=" + ac
+                + "\nZeroFlag=" + zeroFlag
                 + "\n" + registros.toString();
     }
 }
