@@ -20,6 +20,7 @@ import minipc.services.GestorMemoriaVirtual;
 import minipc.services.SistemaArchivos;
 
 import java.util.List;
+import java.util.ArrayList;
 import minipc.parser.ASMReader;
 import minipc.parser.ASMValidator;
 import minipc.parser.ASMParser;
@@ -47,19 +48,20 @@ public class Controlador {
     private Instruccion instruccionActual;
     private int ticksRestantes;
     private Configuracion configuracion;
+    private final List<String> erroresEjecucion = new ArrayList<>();
 
-    public Controlador(int tamanoMemoria, int inicioUsuario, int tamanoAlmacenamiento, int tamanoIndice, int tamanoMemoriaVirtual) {
+    public Controlador(int tamañoMemoria, int inicioUsuario, int tamañoAlmacenamiento, int tamañoIndice, int tamañoMemoriaVirtual) {
 
         this.cpu = new CPU();
-        this.memoria = new Memoria(tamanoMemoria, inicioUsuario);
-        this.almacenamiento = new Almacenamiento(tamanoAlmacenamiento, tamanoIndice, tamanoMemoriaVirtual);
+        this.memoria = new Memoria(tamañoMemoria, inicioUsuario);
+        this.almacenamiento = new Almacenamiento(tamañoAlmacenamiento, tamañoIndice, tamañoMemoriaVirtual);
         inicializarServicios(null);
     }
 
     public Controlador(Configuracion configuracion) {
-        this(configuracion.getTamanoMemoria(), configuracion.getInicioUsuario(),
-                configuracion.getTamanoAlmacenamiento(), configuracion.getTamanoIndice(),
-                configuracion.getTamanoMemoriaVirtual());
+        this(configuracion.getTamañoMemoria(), configuracion.getInicioUsuario(),
+                configuracion.getTamañoAlmacenamiento(), configuracion.getTamañoIndice(),
+                configuracion.getTamañoMemoriaVirtual());
         this.configuracion = configuracion;
         inicializarServicios(configuracion);
     }
@@ -72,7 +74,11 @@ public class Controlador {
         this.gestorProcesos = configuracion == null ? new GestorProcesos(memoria)
                 : new GestorProcesos(memoria, configuracion);
         this.gestorMemoriaVirtual = new GestorMemoriaVirtual(memoria, almacenamiento, gestorProcesos);
-        this.fcfs = new FCFS(gestorProcesos);
+        String algoritmo = configuracion == null ? "FCFS" : configuracion.getAlgoritmo();
+        this.fcfs = switch (algoritmo) {
+            case "FCFS" -> new FCFS(gestorProcesos);
+            default -> throw new IllegalArgumentException("Algoritmo no implementado: " + algoritmo);
+        };
         this.despachador = new Despachador(cpu, gestorProcesos, fcfs);
         this.sistemaArchivos = new SistemaArchivos(almacenamiento, gestorProcesos);
         this.gestorInterrupciones = new GestorInterrupciones(cpu, gestorProcesos, despachador, sistemaArchivos);
@@ -221,7 +227,8 @@ public class Controlador {
         }
 
         if (cpu.getPC() < proceso.getInicioPrograma()) {
-            throw new IllegalStateException("El PC se encuentra fuera del rango del proceso.");
+            finalizarPorError(proceso, new IllegalStateException("El PC se encuentra fuera del rango del proceso."));
+            return;
         }
 
         /*
@@ -235,7 +242,8 @@ public class Controlador {
             instruccionActual = memoria.leer(cpu.getPC());
 
             if (instruccionActual == null) {
-                throw new IllegalStateException("No existe una instrucción en la dirección " + cpu.getPC());
+                finalizarPorError(proceso, new IllegalStateException("No existe una instrucción en la dirección " + cpu.getPC()));
+                return;
             }
 
             cpu.setIR(instruccionActual.getTextoOriginal());
@@ -266,7 +274,15 @@ public class Controlador {
          *
          * INT 09H tiene peso 0, por lo que llega directamente aquí.
          */
-        boolean pcModificado = executor.ejecutar(instruccionActual);
+        boolean pcModificado;
+        try {
+            pcModificado = executor.ejecutar(instruccionActual);
+        } catch (IllegalArgumentException | IllegalStateException | ArithmeticException error) {
+            // Una falla posterior al cambio de proceso no debe finalizar al siguiente PID.
+            if (gestorProcesos.getProcesoActual() != proceso) throw error;
+            finalizarPorError(proceso, error);
+            return;
+        }
 
         reiniciarControlInstruccion();
 
@@ -302,6 +318,22 @@ public class Controlador {
             intentarReactivarSuspendidos();
             despachador.despacharSiguiente();
         }
+    }
+
+    private void finalizarPorError(BCP proceso, RuntimeException error) {
+        despachador.guardarContextoActual();
+        proceso.setMotivoError(error.getMessage());
+        erroresEjecucion.add("ERROR DE EJECUCIÓN | PID " + proceso.getPid()
+                + " | PC=" + proceso.getPC() + " | IR=" + proceso.getIR()
+                + " | " + error.getMessage());
+        gestorProcesos.finalizarProcesoActual();
+        reiniciarControlInstruccion();
+        intentarReactivarSuspendidos();
+        despachador.despacharSiguiente();
+    }
+
+    public List<String> getErroresEjecucion() {
+        return new ArrayList<>(erroresEjecucion);
     }
 
     /**
@@ -346,7 +378,7 @@ public class Controlador {
             for (BCP bcp : gestorProcesos.getListaTrabajos()) {
                 if (bcp.getEstado() == EstadoProceso.PREPARADO_SUSPENDIDO
                         && gestorMemoriaVirtual.estaEnMemoriaVirtual(bcp)
-                        && gestorProcesos.hayEspacioParaPrograma(bcp.getTamanoPrograma())) {
+                        && gestorProcesos.hayEspacioParaPrograma(bcp.getTamañoPrograma())) {
                     gestorMemoriaVirtual.reactivarProceso(bcp);
                     procesoReactivado = true;
                     break;
@@ -382,6 +414,7 @@ public class Controlador {
 
     /** Reinicia la simulación y permite escoger si conservar los archivos. */
     public void reiniciar(boolean conservarArchivos) {
+        erroresEjecucion.clear();
         gestorInterrupciones.reiniciar();
         gestorMemoriaVirtual.reiniciar();
         gestorProcesos.reiniciar();

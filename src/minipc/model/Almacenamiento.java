@@ -19,11 +19,11 @@ import java.util.Collections;
 public class Almacenamiento {
 
     private int size;
-    private int tamanoIndice;
-    private int tamanoMemoriaVirtual;
+    private int tamañoIndice;
+    private int tamañoMemoriaVirtual;
     private int inicioMemoriaVirtual;
 
-    private int tamanoArchivos;
+    private int tamañoArchivos;
     private List<EntradaIndice> indiceArchivos;
     private List<ArchivoSimulado> archivos;
     private List<Instruccion> memoriaVirtual;
@@ -59,36 +59,36 @@ public class Almacenamiento {
      * Crea la unidad de almacenamiento secundario.
      *
      * @param size tamaño total del almacenamiento
-     * @param tamanoIndice cantidad de posiciones reservadas para el índice
-     * @param tamanoMemoriaVirtual cantidad de posiciones reservadas para memoria virtual
+     * @param tamañoIndice cantidad de posiciones reservadas para el índice
+     * @param tamañoMemoriaVirtual cantidad de posiciones reservadas para memoria virtual
      */
-    public Almacenamiento(int size, int tamanoIndice, int tamanoMemoriaVirtual) {
+    public Almacenamiento(int size, int tamañoIndice, int tamañoMemoriaVirtual) {
 
         if (size <= 0) {
             throw new IllegalArgumentException("El tamaño del almacenamiento debe ser mayor que cero.");
         }
 
-        if (tamanoIndice <= 0) {
+        if (tamañoIndice <= 0) {
             throw new IllegalArgumentException("El tamaño del índice debe ser mayor que cero.");
         }
 
-        if (tamanoMemoriaVirtual < 0) {
+        if (tamañoMemoriaVirtual < 0) {
             throw new IllegalArgumentException("El tamaño de memoria virtual no puede ser negativo.");
         }
 
-        if ((long) tamanoIndice + tamanoMemoriaVirtual >= size) {
+        if ((long) tamañoIndice + tamañoMemoriaVirtual >= size) {
             throw new IllegalArgumentException("No existe espacio suficiente para almacenar archivos.");
         }
 
         this.size = size;
-        this.tamanoIndice = tamanoIndice;
-        this.tamanoMemoriaVirtual = tamanoMemoriaVirtual;
-        this.inicioMemoriaVirtual = size - tamanoMemoriaVirtual;
+        this.tamañoIndice = tamañoIndice;
+        this.tamañoMemoriaVirtual = tamañoMemoriaVirtual;
+        this.inicioMemoriaVirtual = size - tamañoMemoriaVirtual;
 
-        this.tamanoArchivos = size - tamanoIndice - tamanoMemoriaVirtual;
-        this.indiceArchivos = new ArrayList<>(Collections.<EntradaIndice>nCopies(tamanoIndice, null));
-        this.archivos = new ArrayList<>(Collections.<ArchivoSimulado>nCopies(tamanoArchivos, null));
-        this.memoriaVirtual = new ArrayList<>(Collections.<Instruccion>nCopies(tamanoMemoriaVirtual, null));
+        this.tamañoArchivos = size - tamañoIndice - tamañoMemoriaVirtual;
+        this.indiceArchivos = new ArrayList<>(Collections.<EntradaIndice>nCopies(tamañoIndice, null));
+        this.archivos = new ArrayList<>(Collections.<ArchivoSimulado>nCopies(tamañoArchivos, null));
+        this.memoriaVirtual = new ArrayList<>(Collections.<Instruccion>nCopies(tamañoMemoriaVirtual, null));
     }
 
     /**
@@ -167,7 +167,7 @@ public class Almacenamiento {
         }
 
         EntradaIndice entrada = indiceArchivos.get(posicionIndice);
-        return archivos.get(entrada.getDireccion() - tamanoIndice);
+        return archivos.get(entrada.getDireccion() - tamañoIndice);
     }
 
     /**
@@ -244,7 +244,7 @@ public class Almacenamiento {
 
         EntradaIndice entrada = indiceArchivos.get(posicionIndice);
 
-        ArchivoSimulado archivo = archivos.get(entrada.getDireccion() - tamanoIndice);
+        ArchivoSimulado archivo = archivos.get(entrada.getDireccion() - tamañoIndice);
         liberarBloqueArchivo(archivo);
         archivo.setDireccionInicio(-1);
         indiceArchivos.set(posicionIndice, null);
@@ -285,15 +285,15 @@ public class Almacenamiento {
     /**
      * Lee un programa almacenado en memoria virtual.
      */
-    public List<Instruccion> leerProgramaVirtual(int inicio, int tamano) {
+    public List<Instruccion> leerProgramaVirtual(int inicio, int tamaño) {
 
         List<Instruccion> programa = new ArrayList<>();
 
-        if (tamano < 0 || inicio < inicioMemoriaVirtual || inicio > size || tamano > size - inicio) {
+        if (tamaño < 0 || inicio < inicioMemoriaVirtual || inicio > size || tamaño > size - inicio) {
             throw new IllegalArgumentException("El bloque solicitado no pertenece a memoria virtual.");
         }
 
-        for (int i = 0; i < tamano; i++) {
+        for (int i = 0; i < tamaño; i++) {
 
             Instruccion contenido = memoriaVirtual.get(inicio + i - inicioMemoriaVirtual);
 
@@ -310,13 +310,13 @@ public class Almacenamiento {
     /**
      * Libera un programa almacenado en memoria virtual.
      */
-    public void liberarProgramaVirtual(int inicio, int tamano) {
+    public void liberarProgramaVirtual(int inicio, int tamaño) {
 
-        if (tamano < 0 || inicio < inicioMemoriaVirtual || inicio > size || tamano > size - inicio) {
+        if (tamaño < 0 || inicio < inicioMemoriaVirtual || inicio > size || tamaño > size - inicio) {
             throw new IllegalArgumentException("El bloque solicitado no pertenece a memoria virtual.");
         }
 
-        for (int i = 0; i < tamano; i++) {
+        for (int i = 0; i < tamaño; i++) {
             memoriaVirtual.set(inicio + i - inicioMemoriaVirtual, null);
         }
     }
@@ -359,7 +359,7 @@ public class Almacenamiento {
      */
     private int buscarEntradaIndice(String nombre) {
 
-        for (int i = 0; i < tamanoIndice; i++) {
+        for (int i = 0; i < tamañoIndice; i++) {
 
             if (indiceArchivos.get(i) != null) {
 
@@ -379,7 +379,7 @@ public class Almacenamiento {
      */
     private int buscarPosicionIndiceLibre() {
 
-        for (int i = 0; i < tamanoIndice; i++) {
+        for (int i = 0; i < tamañoIndice; i++) {
 
             if (indiceArchivos.get(i) == null) {
                 return i;
@@ -390,11 +390,11 @@ public class Almacenamiento {
     }
 
     private boolean bloqueArchivoDisponible(int inicio, int cantidad, ArchivoSimulado ignorado) {
-        if (cantidad <= 0 || inicio < tamanoIndice || cantidad > inicioMemoriaVirtual - inicio) {
+        if (cantidad <= 0 || inicio < tamañoIndice || cantidad > inicioMemoriaVirtual - inicio) {
             return false;
         }
         for (int i = inicio; i < inicio + cantidad; i++) {
-            ArchivoSimulado ocupante = archivos.get(i - tamanoIndice);
+            ArchivoSimulado ocupante = archivos.get(i - tamañoIndice);
             if (ocupante != null && ocupante != ignorado) {
                 return false;
             }
@@ -403,7 +403,7 @@ public class Almacenamiento {
     }
 
     private int buscarBloqueArchivoLibre(int cantidad, ArchivoSimulado ignorado) {
-        if (cantidad <= 0 || cantidad > tamanoArchivos) {
+        if (cantidad <= 0 || cantidad > tamañoArchivos) {
             return -1;
         }
         int consecutivos = 0;
@@ -411,7 +411,7 @@ public class Almacenamiento {
             if (archivos.get(i) == null || archivos.get(i) == ignorado) {
                 consecutivos++;
                 if (consecutivos == cantidad) {
-                    return tamanoIndice + i - cantidad + 1;
+                    return tamañoIndice + i - cantidad + 1;
                 }
             } else {
                 consecutivos = 0;
@@ -421,14 +421,14 @@ public class Almacenamiento {
     }
 
     private void ocuparBloqueArchivo(ArchivoSimulado archivo) {
-        int inicio = archivo.getDireccionInicio() - tamanoIndice;
+        int inicio = archivo.getDireccionInicio() - tamañoIndice;
         for (int i = 0; i < archivo.getEspacioOcupado(); i++) {
             archivos.set(inicio + i, archivo);
         }
     }
 
     private void liberarBloqueArchivo(ArchivoSimulado archivo) {
-        int inicio = archivo.getDireccionInicio() - tamanoIndice;
+        int inicio = archivo.getDireccionInicio() - tamañoIndice;
         for (int i = 0; i < archivo.getEspacioOcupado(); i++) {
             archivos.set(inicio + i, null);
         }
@@ -442,12 +442,21 @@ public class Almacenamiento {
         return libres;
     }
 
-    public int getEspacioArchivosOcupado() {
-        return tamanoArchivos - getEspacioArchivosDisponible();
+    /** Archivos del índice, sin repetir las posiciones de cada bloque. */
+    public List<ArchivoSimulado> listarArchivos() {
+        List<ArchivoSimulado> resultado = new ArrayList<>();
+        for (EntradaIndice entrada : indiceArchivos) {
+            if (entrada != null) resultado.add(buscarArchivo(entrada.getNombre()));
+        }
+        return resultado;
     }
 
-    public int getTamanoArchivos() {
-        return tamanoArchivos;
+    public int getEspacioArchivosOcupado() {
+        return tamañoArchivos - getEspacioArchivosDisponible();
+    }
+
+    public int getTamañoArchivos() {
+        return tamañoArchivos;
     }
 
     /**
@@ -458,12 +467,12 @@ public class Almacenamiento {
 
         validarDireccion(direccion);
 
-        if (direccion < tamanoIndice) {
+        if (direccion < tamañoIndice) {
             EntradaIndice entrada = indiceArchivos.get(direccion);
             return entrada == null ? "" : "INDICE " + entrada.getNombre() + " -> " + entrada.getDireccion();
         }
         if (direccion < inicioMemoriaVirtual) {
-            ArchivoSimulado archivo = archivos.get(direccion - tamanoIndice);
+            ArchivoSimulado archivo = archivos.get(direccion - tamañoIndice);
             return archivo == null ? "" : (archivo.esPrograma() ? "PROGRAMA " : "ARCHIVO ") + archivo.getNombre();
         }
         Instruccion instruccion = memoriaVirtual.get(direccion - inicioMemoriaVirtual);
@@ -493,12 +502,12 @@ public class Almacenamiento {
         }
     }
 
-    public int getTamanoIndice() {
-        return tamanoIndice;
+    public int getTamañoIndice() {
+        return tamañoIndice;
     }
 
     public int getInicioArchivos() {
-        return tamanoIndice;
+        return tamañoIndice;
     }
 
     public int getFinArchivos() {
@@ -509,7 +518,7 @@ public class Almacenamiento {
         return inicioMemoriaVirtual;
     }
 
-    public int getTamanoMemoriaVirtual() {
-        return tamanoMemoriaVirtual;
+    public int getTamañoMemoriaVirtual() {
+        return tamañoMemoriaVirtual;
     }
 }

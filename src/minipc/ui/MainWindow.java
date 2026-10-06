@@ -1,1632 +1,1176 @@
 package minipc.ui;
 
-import minipc.controller.Controlador;
-import minipc.model.BCP;
-import minipc.model.CPU;
-import minipc.model.Instruccion;
-import minipc.model.Memoria;
-import minipc.parser.ASMParser;
-import minipc.parser.ASMReader;
-import minipc.parser.ASMValidator;
-
-import javax.swing.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.table.DefaultTableModel;
-
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.Insets;
+import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
-
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.TitledBorder;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
+import minipc.config.ConfigLoader;
+import minipc.config.Configuracion;
+import minipc.controller.Controlador;
+import minipc.model.*;
 
 /**
- * Ventana principal de la interfaz gráfica de la Mini PC.
+ * Ventana principal de la Mini PC.
  *
- * Permite al usuario configurar la memoria, cargar archivos ASM,
- * ejecutar instrucciones paso a paso o de forma completa y visualizar
- * el estado de la CPU, memoria y BCP.
- *
- * La interfaz delega la lógica de ejecución al Controlador y se encarga
- * principalmente de mostrar y actualizar la información del simulador.
+ * La interfaz únicamente muestra información y delega toda la lógica
+ * de ejecución al Controlador.
  */
 public class MainWindow extends JFrame {
 
+    private final Path raiz;
+
     private Controlador controlador;
+    private Configuracion configuracion;
 
-    // Configuración
-    private JTextField txtTamanoMemoria;
-    private JTextField txtInicioUsuario;
+    private final Map<Integer, String> nombres = new HashMap<>();
 
-    private JButton btnConfigurarMemoria;
-    private JButton btnCargarArchivo;
-    private JButton btnSiguiente;
-    private JButton btnEjecutarTodo;
-    private JButton btnReiniciar;
+    /*
+     * Colores de la interfaz.
+     *
+     * Se utilizan únicamente para diferenciar visualmente los componentes
+     * del simulador. No intervienen en la lógica de la Mini PC.
+     */
+    private static final Color FONDO = new Color(243, 246, 249);
+    private static final Color PANEL = Color.WHITE;
+    private static final Color BORDE = new Color(205, 213, 221);
+    private static final Color TEXTO = new Color(35, 43, 52);
+    private static final Color TEXTO_SECUNDARIO = new Color(92, 104, 116);
 
-    // Estado general
-    private JLabel lblEstadoGeneral;
+    private static final Color AZUL = new Color(48, 105, 180);
+    private static final Color AZUL_SUAVE = new Color(230, 240, 252);
 
-    // Tablas
-    private JTable tablaPrograma;
-    private JTable tablaMemoria;
+    private static final Color VERDE = new Color(53, 145, 91);
+    private static final Color VERDE_SUAVE = new Color(231, 246, 236);
 
-    private DefaultTableModel modeloPrograma;
-    private DefaultTableModel modeloMemoria;
+    private static final Color NARANJA = new Color(205, 127, 42);
+    private static final Color NARANJA_SUAVE = new Color(252, 239, 220);
 
-    // CPU
-    private JLabel lblPCValor;
-    private JLabel lblACValor;
+    private static final Color ROJO = new Color(184, 69, 69);
+    private static final Color ROJO_SUAVE = new Color(249, 229, 229);
 
-    private JLabel lblAXValor;
-    private JLabel lblBXValor;
-    private JLabel lblCXValor;
-    private JLabel lblDXValor;
+    private static final Color MORADO = new Color(118, 83, 169);
+    private static final Color MORADO_SUAVE = new Color(239, 233, 248);
 
-    private JTextField txtIR;
+    private static final Color GRIS_SUAVE = new Color(236, 239, 242);
 
-    // BCP
-    private JLabel lblPIDValor;
-    private JLabel lblEstadoBCPValor;
+    private final JLabel procesoCPU = new JLabel("CPU libre");
 
-    private JLabel lblBCPPCValor;
-    private JLabel lblBCPACValor;
+    private final JLabel valorPC = valorRegistro("0");
+    private final JLabel valorIR = valorRegistro("");
+    private final JLabel valorAC = valorRegistro("0");
+    private final JLabel valorAX = valorRegistro("0");
+    private final JLabel valorBX = valorRegistro("0");
+    private final JLabel valorCX = valorRegistro("0");
+    private final JLabel valorDX = valorRegistro("0");
+    private final JLabel valorAH = valorRegistro("");
+    private final JLabel valorAL = valorRegistro("");
+    private final JLabel valorZF = valorRegistro("false");
 
-    private JLabel lblBCPAXValor;
-    private JLabel lblBCPBXValor;
-    private JLabel lblBCPCXValor;
-    private JLabel lblBCPDXValor;
+    private final JLabel estadoMonitor = new JLabel("Sin entrada solicitada");
 
-    private JLabel lblInicioProgramaValor;
-    private JLabel lblFinProgramaValor;
-    private JLabel lblTamanoProgramaValor;
+    private final JLabel valorRAM = new JLabel("-");
+    private final JLabel valorKernel = new JLabel("-");
+    private final JLabel valorProgramasEnRAM = new JLabel("-");
+    private final JLabel valorDisco = new JLabel("-");
 
-    // Información memoria
-    private JLabel lblRangoSO;
-    private JLabel lblRangoUsuario;
+    private final JProgressBar barraRAM = new JProgressBar();
+    private final JProgressBar barraDisco = new JProgressBar();
 
+    private final JTextArea detalle = texto();
+    private final JTextArea pantalla = texto();
+    private final JTextField entrada = new JTextField(10);
+
+    private final JCheckBox conservar = new JCheckBox("Conservar archivos al reiniciar", true);
+
+    private final JButton cargar = new JButton("Cargar ASM");
+    private final JButton disco = new JButton("Ejecutar desde disco");
+    private final JButton siguiente = new JButton("Siguiente");
+    private final JButton automatico = new JButton("Ejecutar");
+    private final JButton pausa = new JButton("Pausar");
+    private final JButton enviar = new JButton("Enviar");
+
+    private final DefaultTableModel trabajos = modelo(
+            "PID", "Programa", "Estado", "Ubicación", "Base", "Instrucciones", "Tiempo CPU (s)");
+
+    private final JTextArea estadisticas = texto();
+
+    private final DefaultTableModel ram = modelo("Dirección", "Área", "Contenido");
+    private final DefaultTableModel almacenamiento = modelo("Dirección", "Área", "Contenido");
+    private final DefaultTableModel archivos = modelo("Nombre", "Dirección", "Peso", "Espacio", "Tipo");
+
+    private final JTable tablaTrabajos = new JTable(trabajos);
+    private final JTable tablaRam = new JTable(ram);
+    private final JTable tablaAlmacenamiento = new JTable(almacenamiento);
+    private final JTable tablaArchivos = new JTable(archivos);
+
+    private final Timer reloj;
+
+    private boolean continuarAutomatico;
+    private boolean actualizando;
+    private Integer seleccionado;
 
     public MainWindow() {
+        this(Paths.get("."));
+    }
 
-        setTitle("Mini PC");
+    public MainWindow(Path raiz) {
+
+        super("Mini PC - Gestor de Procesos");
+
+        this.raiz = raiz.toAbsolutePath().normalize();
+        // Cada tick automático consume un segundo real y un segundo simulado de CPU.
+        this.reloj = new Timer(1000, e -> ejecutarTick());
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-        setSize(1400, 820);
-
-        setMinimumSize(
-                new Dimension(1100, 700)
-        );
-
+        setMinimumSize(new Dimension(1250, 720));
+        setSize(1500, 900);
         setLocationRelativeTo(null);
 
-        iniciarComponentes();
+        getContentPane().setBackground(FONDO);
 
-        agregarEventos();
+        configurarBotones();
+        configurarTablas();
+        construirInterfaz();
+        registrarEventos();
 
-        estadoInicial();
+        actualizar();
+
+        try {
+            cargarConfiguracion(this.raiz.resolve("config/minipc.txt"));
+        } catch (IOException | RuntimeException ex) {
+            // Permite seleccionar la configuración desde el botón.
+        }
     }
 
+    /**
+     * Construye una interfaz tipo panel de control:
+     *
+     * izquierda -> procesos y BCP
+     * centro    -> CPU, ejecución y consola
+     * derecha   -> memoria, disco, archivos y estadísticas
+     */
+    private void construirInterfaz() {
 
-    private void iniciarComponentes() {
+        setLayout(new BorderLayout(10, 10));
 
-        JPanel principal =
-                new JPanel(
-                        new BorderLayout(12, 12)
-                );
+        add(crearEncabezado(), BorderLayout.NORTH);
 
-        principal.setBorder(
-                BorderFactory.createEmptyBorder(
-                        12, 12, 12, 12
-                )
-        );
+        JPanel principal = new JPanel(new BorderLayout(10, 10));
+        principal.setOpaque(false);
+        principal.setBorder(new EmptyBorder(0, 10, 10, 10));
 
-        setContentPane(principal);
+        JSplitPane izquierdaCentro = new JSplitPane(
+                JSplitPane.HORIZONTAL_SPLIT,
+                crearPanelProcesos(),
+                crearPanelCPUConsola());
 
-        principal.add(
-                crearCabecera(),
-                BorderLayout.NORTH
-        );
+        configurarSplit(izquierdaCentro, 0.40, 500);
 
-        principal.add(
-                crearContenidoCentral(),
-                BorderLayout.CENTER
-        );
+        JSplitPane contenido = new JSplitPane(
+                JSplitPane.HORIZONTAL_SPLIT,
+                izquierdaCentro,
+                crearPanelRecursos());
+
+        configurarSplit(contenido, 0.73, 1050);
+
+        principal.add(contenido, BorderLayout.CENTER);
+        add(principal, BorderLayout.CENTER);
     }
 
+    private JPanel crearEncabezado() {
 
-    private JPanel crearCabecera() {
+        JPanel exterior = new JPanel(new BorderLayout(0, 8));
+        exterior.setOpaque(false);
+        exterior.setBorder(new EmptyBorder(10, 10, 0, 10));
 
-        JPanel contenedor =
-                new JPanel();
+        JPanel barra = new JPanel(new BorderLayout(12, 0));
+        barra.setBackground(new Color(36, 48, 61));
+        barra.setBorder(new EmptyBorder(10, 12, 10, 12));
 
-        contenedor.setLayout(
-                new BoxLayout(
-                        contenedor,
-                        BoxLayout.Y_AXIS
-                )
-        );
+        JLabel titulo = new JLabel("MINI PC");
+        titulo.setForeground(Color.WHITE);
+        titulo.setFont(titulo.getFont().deriveFont(Font.BOLD, 20f));
 
+        JLabel subtitulo = new JLabel("Simulador de procesos y sistema operativo");
+        subtitulo.setForeground(new Color(205, 215, 225));
+        subtitulo.setFont(subtitulo.getFont().deriveFont(Font.PLAIN, 12f));
 
-        JPanel tituloPanel =
-                new JPanel(
-                        new BorderLayout()
-                );
+        JPanel identidad = new JPanel(new GridLayout(2, 1, 0, 0));
+        identidad.setOpaque(false);
+        identidad.add(titulo);
+        identidad.add(subtitulo);
 
+        JPanel acciones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        acciones.setOpaque(false);
 
-        JLabel titulo =
-                new JLabel("MINI PC");
+        JButton configurar = new JButton("Configuración");
+        JButton reiniciar = new JButton("Reiniciar");
 
-        titulo.setFont(
-                new Font(
-                        "SansSerif",
-                        Font.BOLD,
-                        26
-                )
-        );
+        aplicarBotonSecundario(configurar);
+        aplicarBotonPrincipal(cargar);
+        aplicarBotonSecundario(disco);
+        aplicarBotonPrincipal(siguiente);
+        aplicarBotonExito(automatico);
+        aplicarBotonSecundario(pausa);
+        aplicarBotonPeligro(reiniciar);
 
+        conservar.setOpaque(false);
+        conservar.setForeground(Color.WHITE);
 
-        JLabel subtitulo =
-                new JLabel(
-                        "Simulador de arquitectura y ejecución"
-                );
+        acciones.add(configurar);
+        acciones.add(cargar);
+        acciones.add(disco);
+        acciones.add(reiniciar);
+        acciones.add(conservar);
 
-        subtitulo.setFont(
-                new Font(
-                        "SansSerif",
-                        Font.PLAIN,
-                        12
-                )
-        );
+        barra.add(identidad, BorderLayout.WEST);
+        barra.add(acciones, BorderLayout.EAST);
 
+        JPanel resumen = new JPanel(new GridLayout(1, 4, 8, 0));
+        resumen.setOpaque(false);
 
-        JPanel textos =
-                new JPanel();
+        resumen.add(crearTarjetaResumen("RAM Usuario", valorRAM, AZUL, barraRAM));
+        resumen.add(crearTarjetaResumen("Kernel / SO", valorKernel, MORADO, null));
+        resumen.add(crearTarjetaResumen("Programas en RAM", valorProgramasEnRAM, VERDE, null));
+        resumen.add(crearTarjetaResumen("Disco", valorDisco, NARANJA, barraDisco));
 
-        textos.setLayout(
-                new BoxLayout(
-                        textos,
-                        BoxLayout.Y_AXIS
-                )
-        );
+        exterior.add(barra, BorderLayout.NORTH);
+        exterior.add(resumen, BorderLayout.CENTER);
+        exterior.add(crearPanelEjecucion(), BorderLayout.SOUTH);
 
-        textos.add(titulo);
-        textos.add(subtitulo);
+        configurar.addActionListener(e -> elegirConfiguracion());
 
+        reiniciar.addActionListener(e -> {
+            detener();
+            if (controlador != null) controlador.reiniciar(conservar.isSelected());
+            nombres.clear();
+            seleccionado = null;
+            actualizar();
+        });
 
-        lblEstadoGeneral =
-                new JLabel("SIN PROGRAMA");
-
-        lblEstadoGeneral.setFont(
-                new Font(
-                        "SansSerif",
-                        Font.BOLD,
-                        14
-                )
-        );
-
-
-        tituloPanel.add(
-                textos,
-                BorderLayout.WEST
-        );
-
-        tituloPanel.add(
-                lblEstadoGeneral,
-                BorderLayout.EAST
-        );
-
-
-        contenedor.add(tituloPanel);
-
-        contenedor.add(
-                Box.createVerticalStrut(10)
-        );
-
-        contenedor.add(
-                crearPanelConfiguracion()
-        );
-
-
-        return contenedor;
+        return exterior;
     }
 
+    private JPanel crearTarjetaResumen(String titulo, JLabel valor, Color acento, JProgressBar barra) {
 
-    private JPanel crearPanelConfiguracion() {
+        JPanel panel = new JPanel(new BorderLayout(4, 6));
+        panel.setBackground(PANEL);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 4, 0, 0, acento),
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(BORDE),
+                        new EmptyBorder(9, 12, 9, 12))));
 
-        JPanel panel =
-                new JPanel(
-                        new BorderLayout(10, 10)
-                );
+        JLabel etiqueta = new JLabel(titulo);
+        etiqueta.setForeground(TEXTO_SECUNDARIO);
+        etiqueta.setFont(etiqueta.getFont().deriveFont(Font.BOLD, 11f));
 
-        panel.setBorder(
-                BorderFactory.createTitledBorder(
-                        "Configuración y ejecución"
-                )
-        );
+        valor.setForeground(TEXTO);
+        valor.setFont(valor.getFont().deriveFont(Font.BOLD, 17f));
 
+        panel.add(etiqueta, BorderLayout.NORTH);
+        panel.add(valor, BorderLayout.CENTER);
 
-        JPanel configuracion =
-                new JPanel(
-                        new FlowLayout(
-                                FlowLayout.LEFT
-                        )
-                );
-
-
-        txtTamanoMemoria =
-                new JTextField("256", 6);
-
-        txtInicioUsuario =
-                new JTextField("64", 6);
-
-
-        btnConfigurarMemoria =
-                new JButton("Configurar Memoria");
-
-        btnCargarArchivo =
-                new JButton("Cargar ASM");
-
-
-        configuracion.add(
-                new JLabel("Memoria:")
-        );
-
-        configuracion.add(
-                txtTamanoMemoria
-        );
-
-        configuracion.add(
-                new JLabel("Inicio Usuario:")
-        );
-
-        configuracion.add(
-                txtInicioUsuario
-        );
-
-        configuracion.add(
-                btnConfigurarMemoria
-        );
-
-        configuracion.add(
-                btnCargarArchivo
-        );
-
-
-        JPanel ejecucion =
-                new JPanel(
-                        new FlowLayout(
-                                FlowLayout.RIGHT
-                        )
-                );
-
-
-        btnSiguiente =
-                new JButton("Siguiente");
-
-        btnEjecutarTodo =
-                new JButton("Ejecutar Todo");
-
-        btnReiniciar =
-                new JButton("Reiniciar");
-
-
-        ejecucion.add(
-                btnSiguiente
-        );
-
-        ejecucion.add(
-                btnEjecutarTodo
-        );
-
-        ejecucion.add(
-                btnReiniciar
-        );
-
-
-        panel.add(
-                configuracion,
-                BorderLayout.WEST
-        );
-
-        panel.add(
-                ejecucion,
-                BorderLayout.EAST
-        );
-
+        if (barra != null) {
+            barra.setStringPainted(true);
+            barra.setPreferredSize(new Dimension(100, 15));
+            panel.add(barra, BorderLayout.SOUTH);
+        }
 
         return panel;
     }
 
+    private JPanel crearPanelProcesos() {
 
-    // =========================================================
-    // CONTENIDO CENTRAL
-    // =========================================================
+        JPanel panel = panelSeccion("Procesos / BCP");
 
-    private JPanel crearContenidoCentral() {
+        tablaTrabajos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        JPanel principal =
-                new JPanel(
-                        new BorderLayout(10, 10)
-                );
+        JPanel detalleBCP = new JPanel(new BorderLayout(4, 4));
+        detalleBCP.setBackground(PANEL);
+        detalleBCP.setBorder(tituloInterno("BCP seleccionado"));
 
+        detalle.setBackground(new Color(249, 250, 252));
+        detalle.setBorder(new EmptyBorder(8, 8, 8, 8));
 
-        JSplitPane splitPrincipal =
-                new JSplitPane(
-                        JSplitPane.HORIZONTAL_SPLIT
-                );
+        detalleBCP.add(new JScrollPane(detalle), BorderLayout.CENTER);
 
+        JSplitPane division = new JSplitPane(
+                JSplitPane.VERTICAL_SPLIT,
+                crearPanelTabla(tablaTrabajos, "Lista de trabajos"),
+                detalleBCP);
 
-        JSplitPane splitIzquierdo =
-                new JSplitPane(
-                        JSplitPane.HORIZONTAL_SPLIT
-                );
+        configurarSplit(division, 0.30, 150);
 
-
-        splitIzquierdo.setLeftComponent(
-                crearPanelPrograma()
-        );
-
-        splitIzquierdo.setRightComponent(
-                crearPanelMemoria()
-        );
-
-        splitIzquierdo.setResizeWeight(0.5);
-
-
-        splitPrincipal.setLeftComponent(
-                splitIzquierdo
-        );
-
-        splitPrincipal.setRightComponent(
-                crearPanelDerecho()
-        );
-
-        splitPrincipal.setResizeWeight(0.72);
-
-
-        principal.add(
-                splitPrincipal,
-                BorderLayout.CENTER
-        );
-
-
-        return principal;
-    }
-
-
-    // =========================================================
-    // PROGRAMA
-    // =========================================================
-
-    private JPanel crearPanelPrograma() {
-
-        JPanel panel =
-                new JPanel(
-                        new BorderLayout()
-                );
-
-        panel.setBorder(
-                BorderFactory.createTitledBorder(
-                        "Programa ASM"
-                )
-        );
-
-
-        modeloPrograma =
-                new DefaultTableModel(
-                        new String[]{
-                                "Dir.",
-                                "ASM"
-                        },
-                        0
-                ) {
-
-                    @Override
-                    public boolean isCellEditable(
-                            int row,
-                            int column
-                    ) {
-
-                        return false;
-                    }
-                };
-
-
-        tablaPrograma =
-                new JTable(
-                        modeloPrograma
-                );
-
-
-        tablaPrograma.setFont(
-                new Font(
-                        Font.MONOSPACED,
-                        Font.PLAIN,
-                        13
-                )
-        );
-
-        tablaPrograma.setRowHeight(24);
-
-        tablaPrograma.setSelectionMode(
-                ListSelectionModel.SINGLE_SELECTION
-        );
-
-
-        panel.add(
-                new JScrollPane(
-                        tablaPrograma
-                ),
-                BorderLayout.CENTER
-        );
-
+        panel.add(division, BorderLayout.CENTER);
 
         return panel;
     }
 
-    private JPanel crearPanelMemoria() {
+    private JPanel crearPanelCPUConsola() {
 
-        JPanel panel =
-                new JPanel(
-                        new BorderLayout(5, 5)
-                );
+        JPanel panel = new JPanel(new BorderLayout(8, 8));
+        panel.setOpaque(false);
 
+        JPanel superior = new JPanel(new BorderLayout(8, 8));
+        superior.setOpaque(false);
+        superior.setMinimumSize(new Dimension(160, 230));
+        superior.add(crearPanelCPU(), BorderLayout.CENTER);
 
-        panel.setBorder(
-                BorderFactory.createTitledBorder(
-                        "Memoria"
-                )
-        );
+        JPanel inferior = new JPanel(new BorderLayout(8, 8));
+        inferior.setOpaque(false);
+        inferior.setMinimumSize(new Dimension(160, 260));
+        inferior.add(crearPanelConsola(), BorderLayout.CENTER);
 
+        JSplitPane division = new JSplitPane(
+                JSplitPane.VERTICAL_SPLIT,
+                superior,
+                inferior);
 
-        JPanel info =
-                new JPanel(
-                        new GridLayout(
-                                2,
-                                1
-                        )
-                );
+        configurarSplit(division, 0.40, 230);
 
-
-        lblRangoSO =
-                new JLabel("S.O.: -");
-
-        lblRangoUsuario =
-                new JLabel("Usuario: -");
-
-
-        info.add(lblRangoSO);
-        info.add(lblRangoUsuario);
-
-
-        modeloMemoria =
-                new DefaultTableModel(
-                        new String[]{
-                                "Dirección",
-                                "Tipo",
-                                "Contenido"
-                        },
-                        0
-                ) {
-
-                    @Override
-                    public boolean isCellEditable(
-                            int row,
-                            int column
-                    ) {
-
-                        return false;
-                    }
-                };
-
-
-        tablaMemoria =
-                new JTable(
-                        modeloMemoria
-                );
-
-
-        tablaMemoria.setFont(
-                new Font(
-                        Font.MONOSPACED,
-                        Font.PLAIN,
-                        13
-                )
-        );
-
-        tablaMemoria.setRowHeight(23);
-
-
-        panel.add(
-                info,
-                BorderLayout.NORTH
-        );
-
-        panel.add(
-                new JScrollPane(
-                        tablaMemoria
-                ),
-                BorderLayout.CENTER
-        );
-
+        panel.add(division, BorderLayout.CENTER);
 
         return panel;
     }
-
-
-    private JPanel crearPanelDerecho() {
-
-        JPanel panel =
-                new JPanel();
-
-        panel.setLayout(
-                new BoxLayout(
-                        panel,
-                        BoxLayout.Y_AXIS
-                )
-        );
-
-
-        JPanel cpu =
-                crearPanelCPU();
-
-        JPanel bcp =
-                crearPanelBCP();
-
-
-        cpu.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        330
-                )
-        );
-
-
-        panel.add(cpu);
-
-        panel.add(
-                Box.createVerticalStrut(10)
-        );
-
-        panel.add(bcp);
-
-
-        return panel;
-    }
-
 
     private JPanel crearPanelCPU() {
 
-        JPanel panel =
-                new JPanel(
-                        new BorderLayout(10, 10)
-                );
+        JPanel panel = panelSeccion("Procesador (CPU)");
 
+        procesoCPU.setFont(procesoCPU.getFont().deriveFont(Font.BOLD, 16f));
+        procesoCPU.setForeground(AZUL);
+        procesoCPU.setHorizontalAlignment(SwingConstants.CENTER);
+        procesoCPU.setBorder(new EmptyBorder(4, 4, 10, 4));
 
-        panel.setBorder(
-                BorderFactory.createTitledBorder(
-                        "CPU"
-                )
-        );
+        panel.add(procesoCPU, BorderLayout.NORTH);
 
+        JPanel registros = new JPanel(new GridLayout(3, 4, 8, 8));
+        registros.setOpaque(false);
+        registros.setBorder(new EmptyBorder(2, 4, 2, 4));
 
-        JPanel tarjetas =
-                new JPanel(
-                        new GridLayout(
-                                2,
-                                3,
-                                8,
-                                8
-                        )
-                );
+        registros.add(crearCeldaRegistro("PC", valorPC, AZUL_SUAVE, AZUL));
+        registros.add(crearCeldaRegistro("IR", valorIR, MORADO_SUAVE, MORADO));
+        registros.add(crearCeldaRegistro("AC", valorAC, VERDE_SUAVE, VERDE));
+        registros.add(crearCeldaRegistro("ZF", valorZF, GRIS_SUAVE, TEXTO_SECUNDARIO));
 
+        registros.add(crearCeldaRegistro("AX", valorAX, PANEL, BORDE));
+        registros.add(crearCeldaRegistro("BX", valorBX, PANEL, BORDE));
+        registros.add(crearCeldaRegistro("CX", valorCX, PANEL, BORDE));
+        registros.add(crearCeldaRegistro("DX", valorDX, PANEL, BORDE));
 
-        lblPCValor =
-                new JLabel("-");
+        registros.add(crearCeldaRegistro("AH", valorAH, PANEL, BORDE));
+        registros.add(crearCeldaRegistro("AL", valorAL, PANEL, BORDE));
+        registros.add(crearCeldaRegistro("ALGORITMO", new JLabel("FCFS"), GRIS_SUAVE, TEXTO_SECUNDARIO));
 
-        lblACValor =
-                new JLabel("0");
-
-        lblAXValor =
-                new JLabel("0");
-
-        lblBXValor =
-                new JLabel("0");
-
-        lblCXValor =
-                new JLabel("0");
-
-        lblDXValor =
-                new JLabel("0");
-
-
-        tarjetas.add(
-                crearTarjetaRegistro(
-                        "PC",
-                        lblPCValor
-                )
-        );
-
-        tarjetas.add(
-                crearTarjetaRegistro(
-                        "AC",
-                        lblACValor
-                )
-        );
-
-        tarjetas.add(
-                crearTarjetaRegistro(
-                        "AX",
-                        lblAXValor
-                )
-        );
-
-        tarjetas.add(
-                crearTarjetaRegistro(
-                        "BX",
-                        lblBXValor
-                )
-        );
-
-        tarjetas.add(
-                crearTarjetaRegistro(
-                        "CX",
-                        lblCXValor
-                )
-        );
-
-        tarjetas.add(
-                crearTarjetaRegistro(
-                        "DX",
-                        lblDXValor
-                )
-        );
-
-
-        JPanel panelIR =
-                new JPanel(
-                        new BorderLayout(5, 5)
-                );
-
-
-        panelIR.setBorder(
-                BorderFactory.createTitledBorder(
-                        "Instruction Register (IR)"
-                )
-        );
-
-
-        txtIR =
-                new JTextField("-");
-
-        txtIR.setEditable(false);
-
-        txtIR.setHorizontalAlignment(
-                JTextField.CENTER
-        );
-
-        txtIR.setFont(
-                new Font(
-                        Font.MONOSPACED,
-                        Font.BOLD,
-                        14
-                )
-        );
-
-
-        panelIR.add(
-                txtIR,
-                BorderLayout.CENTER
-        );
-
-
-        panel.add(
-                tarjetas,
-                BorderLayout.CENTER
-        );
-
-        panel.add(
-                panelIR,
-                BorderLayout.SOUTH
-        );
-
+        panel.add(registros, BorderLayout.CENTER);
 
         return panel;
     }
 
-/**
- * Crea una tarjeta visual para mostrar el valor de un registro.
- *
- * @param nombre nombre del registro
- * @param valor etiqueta donde se mostrará su valor
- * @return panel correspondiente al registro
- */
-    private JPanel crearTarjetaRegistro(
-            String nombre,
-            JLabel valor
-    ) {
+    private JPanel crearCeldaRegistro(String nombre, JLabel valor, Color fondo, Color borde) {
 
-        JPanel panel =
-                new JPanel();
+        JPanel celda = new JPanel(new BorderLayout(2, 2));
+        celda.setBackground(fondo);
+        celda.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(borde),
+                new EmptyBorder(4, 10, 4, 10)));
 
-        panel.setLayout(
-                new BoxLayout(
-                        panel,
-                        BoxLayout.Y_AXIS
-                )
-        );
+        JLabel etiqueta = new JLabel(nombre);
+        etiqueta.setForeground(TEXTO_SECUNDARIO);
+        etiqueta.setFont(etiqueta.getFont().deriveFont(Font.BOLD, 10f));
 
+        valor.setForeground(TEXTO);
+        valor.setFont(new Font(Font.MONOSPACED, Font.BOLD, 13));
 
-        panel.setBorder(
+        celda.add(etiqueta, BorderLayout.NORTH);
+        celda.add(valor, BorderLayout.CENTER);
+
+        return celda;
+    }
+
+    private JPanel crearPanelEjecucion() {
+
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(PANEL);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDE), new EmptyBorder(4, 10, 4, 10)));
+
+        JPanel botones = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 2));
+        botones.setOpaque(false);
+
+        aplicarBotonPrincipal(siguiente);
+        aplicarBotonExito(automatico);
+        aplicarBotonSecundario(pausa);
+
+        botones.add(siguiente);
+        botones.add(automatico);
+        botones.add(pausa);
+
+        panel.add(botones, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private JPanel crearPanelConsola() {
+
+        JPanel panel = panelSeccion("Monitor / Consola");
+
+        pantalla.setLineWrap(true);
+        pantalla.setWrapStyleWord(true);
+        pantalla.setBackground(new Color(24, 30, 36));
+        pantalla.setForeground(new Color(208, 232, 214));
+        pantalla.setCaretColor(Color.WHITE);
+        pantalla.setBorder(new EmptyBorder(10, 10, 10, 10));
+        pantalla.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
+
+        JScrollPane scroll = new JScrollPane(pantalla);
+        scroll.setBorder(BorderFactory.createLineBorder(new Color(45, 55, 65)));
+        scroll.setMinimumSize(new Dimension(160, 120));
+        scroll.setPreferredSize(new Dimension(400, 200));
+
+        panel.add(scroll, BorderLayout.CENTER);
+
+        JPanel teclado = new JPanel(new BorderLayout(8, 6));
+        teclado.setOpaque(false);
+        teclado.setBorder(new EmptyBorder(8, 0, 0, 0));
+
+        JLabel etiqueta = new JLabel("Teclado · valor de 0 a 255");
+        etiqueta.setFont(etiqueta.getFont().deriveFont(Font.BOLD));
+
+        entrada.setToolTipText("Valor entero entre 0 y 255");
+        aplicarBotonPrincipal(enviar);
+
+        teclado.add(etiqueta, BorderLayout.NORTH);
+        teclado.add(entrada, BorderLayout.CENTER);
+        teclado.add(enviar, BorderLayout.EAST);
+        estadoMonitor.setForeground(TEXTO_SECUNDARIO);
+        estadoMonitor.setBorder(new EmptyBorder(0, 0, 8, 0));
+        panel.add(estadoMonitor, BorderLayout.NORTH);
+
+        panel.add(teclado, BorderLayout.SOUTH);
+
+        return panel;
+    }
+
+    private JTabbedPane crearPanelRecursos() {
+
+        JTabbedPane pestanas = new JTabbedPane();
+
+        pestanas.addTab("RAM", crearPanelTabla(tablaRam, "Memoria principal"));
+        pestanas.addTab("Disco", crearPanelTabla(tablaAlmacenamiento, "Almacenamiento secundario"));
+        pestanas.addTab("Archivos", crearPanelTabla(tablaArchivos, "Archivos simulados"));
+        JPanel panelEstadisticas = panelSeccion("Estadísticas de procesos");
+        estadisticas.setLineWrap(true);
+        estadisticas.setWrapStyleWord(true);
+        estadisticas.setBorder(new EmptyBorder(12, 12, 12, 12));
+        panelEstadisticas.add(new JScrollPane(estadisticas), BorderLayout.CENTER);
+        pestanas.addTab("Estadísticas", panelEstadisticas);
+
+        return pestanas;
+    }
+
+    private JPanel crearPanelTabla(JTable tabla, String titulo) {
+
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(PANEL);
+        panel.setBorder(tituloInterno(titulo));
+        panel.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private JPanel panelSeccion(String titulo) {
+
+        JPanel panel = new JPanel(new BorderLayout(6, 6));
+        panel.setBackground(PANEL);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDE),
                 BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(
-                                new Color(
-                                        200,
-                                        200,
-                                        200
-                                )
-                        ),
-                        BorderFactory.createEmptyBorder(
-                                10,
-                                10,
-                                10,
-                                10
-                        )
-                )
-        );
-
-
-        JLabel titulo =
-                new JLabel(nombre);
-
-
-        titulo.setFont(
-                new Font(
-                        "SansSerif",
-                        Font.BOLD,
-                        12
-                )
-        );
-
-
-        valor.setFont(
-                new Font(
-                        Font.MONOSPACED,
-                        Font.BOLD,
-                        18
-                )
-        );
-
-
-        titulo.setAlignmentX(
-                Component.CENTER_ALIGNMENT
-        );
-
-        valor.setAlignmentX(
-                Component.CENTER_ALIGNMENT
-        );
-
-
-        panel.add(titulo);
-
-        panel.add(
-                Box.createVerticalStrut(5)
-        );
-
-        panel.add(valor);
-
+                        BorderFactory.createTitledBorder(
+                                BorderFactory.createEmptyBorder(),
+                                titulo,
+                                TitledBorder.LEFT,
+                                TitledBorder.TOP,
+                                fuenteInterfaz(Font.BOLD, 13f),
+                                TEXTO),
+                        new EmptyBorder(8, 8, 8, 8))));
 
         return panel;
     }
 
-
-
-    private JPanel crearPanelBCP() {
-
-        JPanel panel =
-                new JPanel(
-                        new BorderLayout()
-                );
-
-
-        panel.setBorder(
-                BorderFactory.createTitledBorder(
-                        "Bloque de Control de Proceso"
-                )
-        );
-
-
-        JPanel datos =
-                new JPanel(
-                        new GridLayout(
-                                11,
-                                2,
-                                5,
-                                5
-                        )
-                );
-
-
-        lblPIDValor = new JLabel("-");
-        lblEstadoBCPValor = new JLabel("-");
-
-        lblBCPPCValor = new JLabel("-");
-        lblBCPACValor = new JLabel("-");
-
-        lblBCPAXValor = new JLabel("-");
-        lblBCPBXValor = new JLabel("-");
-        lblBCPCXValor = new JLabel("-");
-        lblBCPDXValor = new JLabel("-");
-
-        lblInicioProgramaValor = new JLabel("-");
-        lblFinProgramaValor = new JLabel("-");
-        lblTamanoProgramaValor = new JLabel("-");
-
-
-        datos.add(new JLabel("PID:"));
-        datos.add(lblPIDValor);
-
-        datos.add(new JLabel("Estado:"));
-        datos.add(lblEstadoBCPValor);
-
-        datos.add(new JLabel("PC:"));
-        datos.add(lblBCPPCValor);
-
-        datos.add(new JLabel("AC:"));
-        datos.add(lblBCPACValor);
-
-        datos.add(new JLabel("AX:"));
-        datos.add(lblBCPAXValor);
-
-        datos.add(new JLabel("BX:"));
-        datos.add(lblBCPBXValor);
-
-        datos.add(new JLabel("CX:"));
-        datos.add(lblBCPCXValor);
-
-        datos.add(new JLabel("DX:"));
-        datos.add(lblBCPDXValor);
-
-        datos.add(new JLabel("Inicio:"));
-        datos.add(lblInicioProgramaValor);
-
-        datos.add(new JLabel("Fin:"));
-        datos.add(lblFinProgramaValor);
-
-        datos.add(new JLabel("Tamaño:"));
-        datos.add(lblTamanoProgramaValor);
-
-
-        panel.add(
-                datos,
-                BorderLayout.CENTER
-        );
-
-
-        return panel;
+    private TitledBorder tituloInterno(String titulo) {
+        return BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(BORDE),
+                titulo,
+                TitledBorder.LEFT,
+                TitledBorder.TOP,
+                fuenteInterfaz(Font.BOLD, 12f),
+                TEXTO_SECUNDARIO);
     }
 
+    /**
+     * Obtiene una fuente segura para componentes creados antes de que
+     * el JFrame haya recibido una fuente propia del Look & Feel.
+     */
+    private Font fuenteInterfaz(int estilo, float tamaño) {
 
+        Font fuente = UIManager.getFont("Label.font");
 
-    private void agregarEventos() {
+        if (fuente == null) {
+            fuente = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
+        }
 
-        btnConfigurarMemoria.addActionListener(
-                e -> configurarMemoria()
-        );
-
-        btnCargarArchivo.addActionListener(
-                e -> cargarArchivo()
-        );
-
-        btnSiguiente.addActionListener(
-                e -> ejecutarSiguiente()
-        );
-
-        btnEjecutarTodo.addActionListener(
-                e -> ejecutarTodo()
-        );
-
-        btnReiniciar.addActionListener(
-                e -> reiniciar()
-        );
+        return fuente.deriveFont(estilo, tamaño);
     }
 
-
-/**
- * Configura una nueva instancia del simulador utilizando
- * el tamaño de memoria y la dirección inicial de usuario
- * indicados en la interfaz.
- */
-    private void configurarMemoria() {
-
-        try {
-
-            int tamano =
-                    Integer.parseInt(
-                            txtTamanoMemoria
-                                    .getText()
-                                    .trim()
-                    );
-
-
-            int inicioUsuario =
-                    Integer.parseInt(
-                            txtInicioUsuario
-                                    .getText()
-                                    .trim()
-                    );
-
-
-            controlador =
-                    new Controlador(
-                            tamano,
-                            inicioUsuario
-                    );
-
-
-            limpiarDatos();
-
-
-            lblRangoSO.setText(
-                    "S.O.: 0 - "
-                    + controlador.getFinSO()
-            );
-
-
-            lblRangoUsuario.setText(
-                    "Usuario: "
-                    + controlador.getInicioUsuario()
-                    + " - "
-                    + (controlador.getSizeMemoria() - 1)
-            );
-
-
-            lblEstadoGeneral.setText(
-                    "MEMORIA CONFIGURADA"
-            );
-
-
-            btnCargarArchivo.setEnabled(true);
-
-            btnReiniciar.setEnabled(true);
-
-
-            mostrarMemoria();
-
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Memoria configurada correctamente."
-            );
-
-
-        } catch (NumberFormatException e) {
-
-            mostrarError(
-                    "Los valores deben ser números enteros."
-            );
-
-
-        } catch (IllegalArgumentException e) {
-
-            mostrarError(
-                    e.getMessage()
-            );
-        }
+    private void configurarSplit(JSplitPane split, double peso, int posicion) {
+        split.setBorder(null);
+        split.setContinuousLayout(true);
+        split.setResizeWeight(peso);
+        split.setDividerLocation(posicion);
+        split.setDividerSize(7);
     }
 
+    private void configurarBotones() {
+        conservar.setFocusPainted(false);
+        entrada.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+    }
 
-/**
- * Permite seleccionar un archivo .asm, valida su contenido,
- * lo convierte en instrucciones y lo carga en memoria.
- */
-    private void cargarArchivo() {
+    private void aplicarBotonPrincipal(JButton boton) {
+        aplicarEstiloBoton(boton, AZUL, Color.WHITE);
+    }
 
-        if (controlador == null) {
+    private void aplicarBotonExito(JButton boton) {
+        aplicarEstiloBoton(boton, VERDE, Color.WHITE);
+    }
 
-            mostrarError(
-                    "Primero debe configurar la memoria."
-            );
+    private void aplicarBotonAdvertencia(JButton boton) {
+        aplicarEstiloBoton(boton, NARANJA, Color.WHITE);
+    }
 
-            return;
+    private void aplicarBotonPeligro(JButton boton) {
+        aplicarEstiloBoton(boton, ROJO, Color.WHITE);
+    }
+
+    private void aplicarBotonSecundario(JButton boton) {
+        aplicarEstiloBoton(boton, new Color(89, 101, 114), Color.WHITE);
+    }
+
+    private void aplicarEstiloBoton(JButton boton, Color fondo, Color texto) {
+        boton.setFocusPainted(false);
+        boton.setBackground(fondo);
+        boton.setForeground(texto);
+        boton.setOpaque(true);
+        boton.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(fondo.darker()),
+                new EmptyBorder(6, 10, 6, 10)));
+    }
+
+    private static JLabel valorRegistro(String texto) {
+        JLabel label = new JLabel(texto);
+        label.setHorizontalAlignment(SwingConstants.LEFT);
+        return label;
+    }
+
+    private void configurarTablas() {
+
+        JTable[] tablas = {
+            tablaTrabajos,
+            tablaRam,
+            tablaAlmacenamiento,
+            tablaArchivos
+        };
+
+        for (JTable tabla : tablas) {
+            tabla.setFillsViewportHeight(true);
+            tabla.setRowHeight(24);
+            tabla.setGridColor(new Color(225, 229, 234));
+            tabla.setSelectionBackground(AZUL_SUAVE);
+            tabla.setSelectionForeground(TEXTO);
+            tabla.getTableHeader().setFont(tabla.getTableHeader().getFont().deriveFont(Font.BOLD));
+            tabla.getTableHeader().setBackground(new Color(228, 233, 239));
+            tabla.getTableHeader().setForeground(TEXTO);
         }
 
-
-        JFileChooser selector =
-                new JFileChooser();
-
-
-        selector.setFileFilter(
-                new FileNameExtensionFilter(
-                        "Archivos ASM (*.asm)",
-                        "asm"
-                )
-        );
+        tablaTrabajos.setDefaultRenderer(Object.class, new RenderizadorProcesos());
+        tablaRam.setDefaultRenderer(Object.class, new RenderizadorMemoria());
+        tablaAlmacenamiento.setDefaultRenderer(Object.class, new RenderizadorAlmacenamiento());
 
 
-        selector.setAcceptAllFileFilterUsed(
-                false
-        );
+        tablaRam.getColumnModel().getColumn(0).setPreferredWidth(70);
+        tablaRam.getColumnModel().getColumn(1).setPreferredWidth(90);
+        tablaRam.getColumnModel().getColumn(2).setPreferredWidth(280);
 
+        tablaAlmacenamiento.getColumnModel().getColumn(0).setPreferredWidth(70);
+        tablaAlmacenamiento.getColumnModel().getColumn(1).setPreferredWidth(90);
+        tablaAlmacenamiento.getColumnModel().getColumn(2).setPreferredWidth(280);
+    }
 
-        if (
-                selector.showOpenDialog(this)
-                != JFileChooser.APPROVE_OPTION
-        ) {
+    private void registrarEventos() {
 
-            return;
-        }
+        tablaTrabajos.getSelectionModel().addListSelectionListener(e -> {
 
-
-        try {
-
-            Path archivo =
-                    selector
-                            .getSelectedFile()
-                            .toPath();
-
-
-            ASMReader reader =
-                    new ASMReader();
-
-
-            List<String> lineas =
-                    reader.leerArchivo(
-                            archivo
-                    );
-
-
-            ASMValidator validator =
-                    new ASMValidator();
-
-
-            List<String> errores =
-                    validator.validarPrograma(
-                            lineas
-                    );
-
-
-            if (!errores.isEmpty()) {
-
-                mostrarError(
-                        String.join(
-                                "\n",
-                                errores
-                        )
-                );
-
-                return;
+            if (!actualizando && !e.getValueIsAdjusting()) {
+                int fila = tablaTrabajos.getSelectedRow();
+                seleccionado = fila < 0 ? null : Integer.valueOf(trabajos.getValueAt(fila, 0).toString());
+                actualizarDetalle();
             }
+        });
 
+        cargar.addActionListener(e -> elegirProgramas());
+        disco.addActionListener(e -> elegirProgramaDisco());
+        siguiente.addActionListener(e -> ejecutarTick());
 
-            ASMParser parser =
-                    new ASMParser();
+        automatico.addActionListener(e -> {
+            continuarAutomatico = true;
+            reloj.start();
+            actualizar();
+        });
 
+        pausa.addActionListener(e -> {
+            detener();
+            actualizar();
+        });
 
-            List<Instruccion> programa =
-                    parser.parsear(
-                            lineas
-                    );
+        enviar.addActionListener(e -> entregarEntrada());
+        entrada.addActionListener(e -> entregarEntrada());
 
+    }
 
-            controlador.cargarPrograma(
-                    programa
-            );
+    private static JTextArea texto() {
 
+        JTextArea area = new JTextArea();
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
 
-            lblEstadoGeneral.setText(
-                    "LISTO"
-            );
+        return area;
+    }
 
+    private static DefaultTableModel modelo(String... columnas) {
 
-            btnSiguiente.setEnabled(true);
+        return new DefaultTableModel(columnas, 0) {
+            @Override
+            public boolean isCellEditable(int fila, int columna) {
+                return false;
+            }
+        };
+    }
 
-            btnEjecutarTodo.setEnabled(true);
+    /**
+     * Cargar otra configuración crea una simulación nueva.
+     */
+    public void cargarConfiguracion(Path archivo) throws IOException {
 
-            btnReiniciar.setEnabled(true);
+        Configuracion nueva = new ConfigLoader().cargar(archivo);
+        Controlador nuevo = new Controlador(nueva);
 
+        detener();
 
-            actualizarPantalla();
+        configuracion = nueva;
+        controlador = nuevo;
 
+        conservar.setSelected(nueva.isConservarArchivosAlReiniciar());
 
-        } catch (Exception e) {
+        nombres.clear();
+        seleccionado = null;
 
-            mostrarError(
-                    e.getMessage()
-            );
+        actualizar();
+    }
+
+    public void cargarPrograma(Path archivo) throws IOException {
+
+        BCP proceso = controlador.cargarPrograma(archivo);
+
+        nombres.put(proceso.getPid(), archivo.getFileName().toString());
+        seleccionado = proceso.getPid();
+
+        actualizar();
+    }
+
+    private JFileChooser selector(String extension, String descripcion, Path directorio) {
+
+        JFileChooser chooser = new JFileChooser(directorio.toFile());
+        chooser.setFileFilter(new FileNameExtensionFilter(descripcion, extension));
+
+        return chooser;
+    }
+
+    private void elegirConfiguracion() {
+
+        JFileChooser chooser = new JFileChooser(raiz.resolve("config").toFile());
+        chooser.setFileFilter(new FileNameExtensionFilter(
+                "Configuración Mini PC (*.properties, *.txt)", "properties", "txt"));
+
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+
+        if (controlador != null
+                && (!controlador.getGestorProcesos().getListaTrabajos().isEmpty()
+                || controlador.getAlmacenamiento().getEspacioArchivosOcupado() > 0)
+                && JOptionPane.showConfirmDialog(
+                        this,
+                        "La nueva configuración inicia otra simulación y borra los archivos simulados. ¿Continuar?",
+                        "Cambiar configuración",
+                        JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        try {
+            cargarConfiguracion(chooser.getSelectedFile().toPath());
+        } catch (IOException | RuntimeException ex) {
+            mostrarError(ex);
         }
     }
 
+    private void elegirProgramas() {
 
-/**
- * Ejecuta una única instrucción del programa cargado
- * y actualiza la información mostrada en la interfaz.
- */
-    private void ejecutarSiguiente() {
+        JFileChooser chooser = selector("asm", "Programas ASM", raiz.resolve("codigo"));
+        chooser.setMultiSelectionEnabled(true);
+
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+
+        for (java.io.File archivo : chooser.getSelectedFiles()) {
+            try {
+                cargarPrograma(archivo.toPath());
+            } catch (IOException | RuntimeException ex) {
+                mostrarError(ex);
+            }
+        }
+    }
+
+    private void elegirProgramaDisco() {
+
+        String nombre = JOptionPane.showInputDialog(
+                this,
+                "Nombre del programa guardado en el disco simulado:");
+
+        if (nombre == null) return;
 
         try {
+            BCP proceso = controlador.cargarProgramaDesdeDisco(nombre.trim());
 
+            nombres.put(proceso.getPid(), nombre.trim());
+            seleccionado = proceso.getPid();
+
+            actualizar();
+
+        } catch (RuntimeException ex) {
+            mostrarError(ex);
+        }
+    }
+
+    private boolean hayEjecutable() {
+
+        if (controlador == null) return false;
+
+        if (controlador.getProcesoActual() != null
+                || !controlador.getGestorProcesos().getColaPreparados().isEmpty()) {
+            return true;
+        }
+
+        for (BCP bcp : controlador.getGestorProcesos().getListaTrabajos()) {
+
+            if (bcp.getEstado() == EstadoProceso.PREPARADO_SUSPENDIDO
+                    && controlador.getGestorProcesos().hayEspacioParaPrograma(bcp.getTamañoPrograma())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void ejecutarTick() {
+
+        try {
             controlador.ejecutarSiguiente();
 
+            if (controlador.simulacionFinalizada()) detener();
+            else if (!hayEjecutable()) reloj.stop();
 
-            actualizarPantalla();
+            actualizar();
 
-
-            if (
-                    controlador.programaFinalizado()
-            ) {
-
-                lblEstadoGeneral.setText(
-                        "FINALIZADO"
-                );
-
-                btnSiguiente.setEnabled(false);
-
-                btnEjecutarTodo.setEnabled(false);
-
-            } else {
-
-                lblEstadoGeneral.setText(
-                        "EJECUTANDO"
-                );
-            }
-
-
-        } catch (Exception e) {
-
-            mostrarError(
-                    e.getMessage()
-            );
+        } catch (RuntimeException ex) {
+            detener();
+            actualizar();
+            mostrarError(ex);
         }
     }
 
-/**
- * Ejecuta todas las instrucciones restantes del programa
- * hasta que este finalice.
- */
-    private void ejecutarTodo() {
+    private void entregarEntrada() {
 
         try {
+            controlador.recibirEntradaTeclado(entrada.getText());
+            entrada.setText("");
 
-            controlador.ejecutarTodo();
+            if (continuarAutomatico) reloj.start();
 
+            actualizar();
 
-            actualizarPantalla();
-
-
-            lblEstadoGeneral.setText(
-                    "FINALIZADO"
-            );
-
-
-            btnSiguiente.setEnabled(false);
-
-            btnEjecutarTodo.setEnabled(false);
-
-
-        } catch (Exception e) {
-
-            mostrarError(
-                    e.getMessage()
-            );
+        } catch (RuntimeException ex) {
+            mostrarError(ex);
         }
     }
 
-
-
-
-    private void reiniciar() {
-
-        if (controlador != null) {
-            controlador.reiniciar();
-        }
-
-
-        limpiarDatos();
-
-
-        lblEstadoGeneral.setText(
-                "SIN PROGRAMA"
-        );
-
-
-        btnSiguiente.setEnabled(false);
-
-        btnEjecutarTodo.setEnabled(false);
-
-        btnCargarArchivo.setEnabled(
-                controlador != null
-        );
+    private void detener() {
+        reloj.stop();
+        continuarAutomatico = false;
     }
 
-
-/**
- * Actualiza los componentes visuales que muestran
- * el programa, memoria, CPU y BCP.
- */
-    private void actualizarPantalla() {
-
-        mostrarPrograma();
-
-        mostrarMemoria();
-
-        mostrarCPU();
-
-        mostrarBCP();
+    private void mostrarError(Exception ex) {
+        JOptionPane.showMessageDialog(this, ex.getMessage(), "Mini PC", JOptionPane.ERROR_MESSAGE);
     }
 
-    private void mostrarPrograma() {
+    private String hora(LocalDateTime valor) {
+        return valor == null ? "-" : valor.format(DateTimeFormatter.ofPattern("HH:mm"));
+    }
 
-        modeloPrograma.setRowCount(0);
+    private String registros(BCP p) {
 
+        return "PC=" + p.getPC()
+                + " IR=" + p.getIR()
+                + " AC=" + p.getAC()
+                + " AX=" + p.getAX()
+                + " BX=" + p.getBX()
+                + " CX=" + p.getCX()
+                + " DX=" + p.getDX()
+                + " AH=" + p.getAH()
+                + " AL=" + p.getAL()
+                + " ZF=" + p.isZeroFlag();
+    }
 
-        if (
-                controlador == null
-                || controlador.getPrograma() == null
-        ) {
+    private void actualizar() {
 
+        boolean listo = controlador != null;
+
+        cargar.setEnabled(listo);
+        disco.setEnabled(listo);
+        pausa.setEnabled(continuarAutomatico);
+
+        boolean ejecutable = listo && hayEjecutable();
+
+        siguiente.setEnabled(ejecutable && !continuarAutomatico);
+        automatico.setEnabled(ejecutable && !continuarAutomatico);
+
+        boolean espera = listo && controlador.getGestorInterrupciones().hayProcesoEsperandoTeclado();
+
+        enviar.setEnabled(espera);
+        entrada.setEnabled(espera);
+
+        if (!listo) {
+            valorRAM.setText("-");
+            valorKernel.setText("-");
+            valorProgramasEnRAM.setText("-");
+            valorDisco.setText("-");
             return;
         }
 
+        int procesosEnRAM = controlador.getGestorProcesos().getProcesosEnRAM().size();
 
-        List<Instruccion> programa =
-                controlador.getPrograma();
+        int memoriaTotal = configuracion.getTamañoMemoria();
+        int kernel = configuracion.getInicioUsuario();
+        int usuarioTotal = memoriaTotal - kernel;
 
+        int usuarioOcupado = 0;
 
-        int inicio =
-                controlador.getInicioPrograma();
-
-
-        for (
-                int i = 0;
-                i < programa.size();
-                i++
-        ) {
-
-            Instruccion instruccion =
-                    programa.get(i);
-
-
-            modeloPrograma.addRow(
-                    new String[]{
-                            String.valueOf(inicio + i),
-                            instruccion.getTextoOriginal()
-                    }
-            );
+        for (int i = controlador.getInicioUsuario(); i < controlador.getSizeMemoria(); i++) {
+            if (controlador.getMemoria().leer(i) != null) usuarioOcupado++;
         }
 
+        int discoOcupado = controlador.getAlmacenamiento().getEspacioArchivosOcupado();
+        int discoTotal = controlador.getAlmacenamiento().getTamañoArchivos();
 
-        if (
-                !controlador.programaFinalizado()
-        ) {
+        valorRAM.setText(usuarioOcupado + " / " + usuarioTotal);
+        valorKernel.setText(kernel + " posiciones");
+        valorProgramasEnRAM.setText(procesosEnRAM + " / " + configuracion.getMaxProcesosEnRam());
+        valorDisco.setText(discoOcupado + " / " + discoTotal);
 
-            int fila =
-                    controlador
-                            .getCPU()
-                            .getPC()
-                    - inicio;
+        barraRAM.setMaximum(Math.max(usuarioTotal, 1));
+        barraRAM.setValue(usuarioOcupado);
+        barraRAM.setString(usuarioTotal == 0 ? "0%" : (usuarioOcupado * 100 / usuarioTotal) + "%");
 
-
-            if (
-                    fila >= 0
-                    && fila < tablaPrograma.getRowCount()
-            ) {
-
-                tablaPrograma.setRowSelectionInterval(
-                        fila,
-                        fila
-                );
+        barraDisco.setMaximum(Math.max(discoTotal, 1));
+        barraDisco.setValue(Math.min(discoOcupado, discoTotal));
+        barraDisco.setString(discoTotal == 0 ? "0%" : (discoOcupado * 100 / discoTotal) + "%");
 
 
-                tablaPrograma.scrollRectToVisible(
-                        tablaPrograma.getCellRect(
-                                fila,
-                                0,
-                                true
-                        )
-                );
+        CPU c = controlador.getCPU();
+        BCP actual = controlador.getProcesoActual();
+
+        procesoCPU.setText(actual == null ? "CPU libre" : "Ejecutando PID " + actual.getPid());
+        procesoCPU.setForeground(actual == null ? TEXTO_SECUNDARIO : VERDE);
+
+        valorPC.setText(Integer.toString(c.getPC()));
+        valorIR.setText(c.getIR());
+        valorAC.setText(Integer.toString(c.getAC()));
+        valorAX.setText(Integer.toString(c.getRegistros().getAX()));
+        valorBX.setText(Integer.toString(c.getRegistros().getBX()));
+        valorCX.setText(Integer.toString(c.getRegistros().getCX()));
+        valorDX.setText(c.getRegistros().getDX());
+        valorAH.setText(c.getRegistros().getAH());
+        valorAL.setText(c.getRegistros().getAL());
+        valorZF.setText(Boolean.toString(c.isZeroFlag()));
+
+        actualizando = true;
+
+        trabajos.setRowCount(0);
+        StringBuilder resumenEstadisticas = new StringBuilder();
+
+        for (BCP p : controlador.getGestorProcesos().getListaTrabajos()) {
+
+            String ubicacion = p.getEstado() == EstadoProceso.FINALIZADO
+                    ? "Liberada"
+                    : controlador.getGestorMemoriaVirtual().estaEnMemoriaVirtual(p)
+                    ? "Virtual @" + controlador.getGestorMemoriaVirtual().getDireccionVirtual(p)
+                    : "RAM";
+
+            trabajos.addRow(new String[]{
+                Integer.toString(p.getPid()),
+                nombres.getOrDefault(p.getPid(), ""),
+                p.getEstado().toString(),
+                ubicacion,
+                Integer.toString(p.getInicioPrograma()),
+                Integer.toString(p.getTamañoPrograma()),
+                Integer.toString(p.getTiempoCPU())
+            });
+
+            resumenEstadisticas.append("PROCESO PID ").append(p.getPid())
+                    .append(" · ").append(nombres.getOrDefault(p.getPid(), ""))
+                    .append("\n────────────────────────────\n")
+                    .append("Estado: ").append(p.getEstado())
+                    .append("\nResultado: ").append(!p.getMotivoError().isEmpty()
+                            ? "Error: " + p.getMotivoError()
+                            : p.getHoraFinal() == null ? "Pendiente" : "Finalización normal")
+                    .append("\nInicio: ").append(hora(p.getHoraInicio()))
+                    .append("\nFin: ").append(hora(p.getHoraFinal()))
+                    .append("\nDuración real: ").append(p.getHoraFinal() == null ? "Pendiente"
+                            : String.format(java.util.Locale.ROOT, "%.3f s", p.getTiempoTotalSegundos()))
+                    .append("\nTiempo CPU: ").append(p.getTiempoCPU()).append(" s")
+                    .append("\n\nContexto ").append(p.getHoraFinal() == null ? "actual" : "final")
+                    .append("\nPC: ").append(p.getPC()).append("\nIR: ").append(p.getIR())
+                    .append("\nAC: ").append(p.getAC()).append("\nAX: ").append(p.getAX())
+                    .append("\nBX: ").append(p.getBX()).append("\nCX: ").append(p.getCX())
+                    .append("\nDX: ").append(p.getDX()).append("\nAH: ").append(p.getAH())
+                    .append("\nAL: ").append(p.getAL()).append("\nZF: ").append(p.isZeroFlag())
+                    .append("\nPila: ").append(p.getPila()).append("\n\n\n");
+
+            if (seleccionado != null && seleccionado == p.getPid()) {
+                tablaTrabajos.setRowSelectionInterval(
+                        trabajos.getRowCount() - 1,
+                        trabajos.getRowCount() - 1);
             }
         }
-    }
 
-    private void mostrarMemoria() {
-
-        modeloMemoria.setRowCount(0);
-
-
-        if (controlador == null) {
-            return;
+        actualizando = false;
+        String contenidoEstadisticas = resumenEstadisticas.length() == 0
+                ? "Todavía no hay procesos cargados." : resumenEstadisticas.toString();
+        if (!estadisticas.getText().equals(contenidoEstadisticas)) {
+            int posicion = estadisticas.getCaretPosition();
+            estadisticas.setText(contenidoEstadisticas);
+            estadisticas.setCaretPosition(Math.min(posicion, estadisticas.getDocument().getLength()));
         }
 
+        ram.setRowCount(0);
 
-        Memoria memoria =
-                controlador.getMemoria();
+        for (int i = 0; i < controlador.getSizeMemoria(); i++) {
 
+            String contenido = i < controlador.getInicioUsuario()
+                    ? controlador.getMemoria().obtenerContenido(i)
+                    : controlador.getMemoria().leer(i) == null
+                    ? ""
+                    : controlador.getMemoria().leer(i).getTextoOriginal();
 
-        int inicioUsuario =
-                memoria.getInicioUsuario();
+            ram.addRow(new String[]{
+                Integer.toString(i),
+                i < controlador.getInicioUsuario() ? "Kernel" : "Usuario",
+                contenido
+            });
+        }
 
+        Almacenamiento a = controlador.getAlmacenamiento();
 
-        for (
-                int i = 0;
-                i < memoria.getSize();
-                i++
-        ) {
+        almacenamiento.setRowCount(0);
 
-            if (i < inicioUsuario) {
+        for (int i = 0; i < a.getSize(); i++) {
 
-                modeloMemoria.addRow(
-                        new String[]{
-                                String.valueOf(i),
-                                "S.O.",
-                                "Reservado"
-                        }
-                );
+            almacenamiento.addRow(new String[]{
+                Integer.toString(i),
+                i < a.getTamañoIndice()
+                        ? "Índice"
+                        : i < a.getInicioMemoriaVirtual()
+                        ? "Archivos"
+                        : "Virtual",
+                a.obtenerContenido(i)
+            });
+        }
 
-                continue;
+        archivos.setRowCount(0);
+
+        for (ArchivoSimulado f : a.listarArchivos()) {
+
+            archivos.addRow(new String[]{
+                f.getNombre(),
+                Integer.toString(f.getDireccionInicio()),
+                Integer.toString(f.getTamaño()),
+                Integer.toString(f.getEspacioOcupado()),
+                f.esPrograma() ? "Programa ASM" : "Texto"
+            });
+        }
+
+        java.util.List<String> salidas = controlador.getGestorInterrupciones().getSalidas();
+        java.util.List<String> errores = controlador.getErroresEjecucion();
+        String contenidoMonitor = String.join("\n", salidas);
+        if (!errores.isEmpty()) contenidoMonitor += (contenidoMonitor.isEmpty() ? "" : "\n\n")
+                + "Errores de ejecución:\n" + String.join("\n", errores);
+        if (!pantalla.getText().equals(contenidoMonitor)) {
+            pantalla.setText(contenidoMonitor);
+            pantalla.setCaretPosition(pantalla.getDocument().getLength());
+        }
+        estadoMonitor.setText(espera ? "Entrada solicitada: escribe un valor y presiona Enter o Enviar."
+                : "Salida de programas · " + salidas.size() + " mensajes");
+
+        actualizarDetalle();
+    }
+
+    private void actualizarDetalle() {
+
+        BCP p = seleccionado == null || controlador == null
+                ? null
+                : controlador.getGestorProcesos().buscarProceso(seleccionado);
+
+        detalle.setText(
+                p == null
+                        ? "Selecciona un proceso para consultar su BCP, pila y contexto."
+                        : p.toString());
+
+        if (p != null) {
+
+            ArchivoSimulado programa = controlador.getAlmacenamiento().buscarArchivo(nombres.get(p.getPid()));
+
+            if (programa != null && programa.esPrograma()) {
+
+                detalle.append("\n\nPrograma guardado en disco:\n");
+
+                int posicion = 0;
+
+                for (Instruccion instruccion : programa.getInstrucciones()) {
+                    detalle.append(posicion++ + ": " + instruccion.getTextoOriginal() + "\n");
+                }
             }
+        }
 
+        detalle.setCaretPosition(0);
 
-            Instruccion instruccion =
-                    memoria.leer(i);
+    }
 
+    /**
+     * Renderiza los estados de proceso con una representación visual clara.
+     */
+    private class RenderizadorProcesos extends DefaultTableCellRenderer {
 
-            if (instruccion == null) {
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table,
+                Object value,
+                boolean isSelected,
+                boolean hasFocus,
+                int row,
+                int column) {
 
-                modeloMemoria.addRow(
-                        new String[]{
-                                String.valueOf(i),
-                                "Usuario",
-                                "Libre"
-                        }
-                );
+            Component componente = super.getTableCellRendererComponent(
+                    table, value, isSelected, hasFocus, row, column);
 
-            } else {
+            if (isSelected) return componente;
 
-                modeloMemoria.addRow(
-                        new String[]{
-                                String.valueOf(i),
-                                "Usuario",
-                                instruccion.toString()
-                        }
-                );
-            }
+            String estadoProceso = table.getValueAt(row, 2).toString();
+
+            if (estadoProceso.equals("EJECUCION")) componente.setBackground(VERDE_SUAVE);
+            else if (estadoProceso.equals("PREPARADO")) componente.setBackground(AZUL_SUAVE);
+            else if (estadoProceso.equals("BLOQUEADO")) componente.setBackground(ROJO_SUAVE);
+            else if (estadoProceso.contains("SUSPENDIDO")) componente.setBackground(MORADO_SUAVE);
+            else if (estadoProceso.equals("FINALIZADO")) componente.setBackground(GRIS_SUAVE);
+            else componente.setBackground(Color.WHITE);
+
+            componente.setForeground(TEXTO);
+
+            return componente;
         }
     }
 
+    /**
+     * Diferencia visualmente el área Kernel y el área de Usuario.
+     */
+    private class RenderizadorMemoria extends DefaultTableCellRenderer {
 
-    private void mostrarCPU() {
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table,
+                Object value,
+                boolean isSelected,
+                boolean hasFocus,
+                int row,
+                int column) {
 
-        if (
-                controlador == null
-                || controlador.getCPU() == null
-        ) {
+            Component componente = super.getTableCellRendererComponent(
+                    table, value, isSelected, hasFocus, row, column);
 
-            return;
+            if (isSelected) return componente;
+
+            String area = table.getValueAt(row, 1).toString();
+
+            componente.setBackground(area.equals("Kernel") ? MORADO_SUAVE : Color.WHITE);
+            componente.setForeground(TEXTO);
+
+            return componente;
         }
-
-
-        CPU cpu =
-                controlador.getCPU();
-
-
-        lblPCValor.setText(
-                String.valueOf(
-                        cpu.getPC()
-                )
-        );
-
-
-        lblACValor.setText(
-                String.valueOf(
-                        cpu.getAC()
-                )
-        );
-
-
-        lblAXValor.setText(
-                String.valueOf(
-                        cpu.getRegistros().getAX()
-                )
-        );
-
-
-        lblBXValor.setText(
-                String.valueOf(
-                        cpu.getRegistros().getBX()
-                )
-        );
-
-
-        lblCXValor.setText(
-                String.valueOf(
-                        cpu.getRegistros().getCX()
-                )
-        );
-
-
-        lblDXValor.setText(
-                String.valueOf(
-                        cpu.getRegistros().getDX()
-                )
-        );
-
-
-        txtIR.setText(
-                cpu.getIR().isEmpty()
-                        ? "-"
-                        : cpu.getIR()
-        );
     }
 
+    /**
+     * Diferencia visualmente índice, archivos y memoria virtual.
+     */
+    private class RenderizadorAlmacenamiento extends DefaultTableCellRenderer {
 
-    private void mostrarBCP() {
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table,
+                Object value,
+                boolean isSelected,
+                boolean hasFocus,
+                int row,
+                int column) {
 
-        if (
-                controlador == null
-                || controlador.getBCP() == null
-        ) {
+            Component componente = super.getTableCellRendererComponent(
+                    table, value, isSelected, hasFocus, row, column);
 
-            return;
+            if (isSelected) return componente;
+
+            String area = table.getValueAt(row, 1).toString();
+
+            if (area.equals("Índice")) componente.setBackground(AZUL_SUAVE);
+            else if (area.equals("Virtual")) componente.setBackground(MORADO_SUAVE);
+            else componente.setBackground(Color.WHITE);
+
+            componente.setForeground(TEXTO);
+
+            return componente;
         }
-
-
-        BCP bcp =
-                controlador.getBCP();
-
-
-        lblPIDValor.setText(
-                String.valueOf(
-                        bcp.getPid()
-                )
-        );
-
-
-        lblEstadoBCPValor.setText(
-                bcp.getEstado()
-        );
-
-
-        lblBCPPCValor.setText(
-                String.valueOf(
-                        bcp.getPC()
-                )
-        );
-
-
-        lblBCPACValor.setText(
-                String.valueOf(
-                        bcp.getAC()
-                )
-        );
-
-
-        lblBCPAXValor.setText(
-                String.valueOf(
-                        bcp.getAX()
-                )
-        );
-
-
-        lblBCPBXValor.setText(
-                String.valueOf(
-                        bcp.getBX()
-                )
-        );
-
-
-        lblBCPCXValor.setText(
-                String.valueOf(
-                        bcp.getCX()
-                )
-        );
-
-
-        lblBCPDXValor.setText(
-                String.valueOf(
-                        bcp.getDX()
-                )
-        );
-
-
-        lblInicioProgramaValor.setText(
-                String.valueOf(
-                        bcp.getInicioPrograma()
-                )
-        );
-
-
-        lblFinProgramaValor.setText(
-                String.valueOf(
-                        bcp.getFinPrograma()
-                )
-        );
-
-
-        lblTamanoProgramaValor.setText(
-                String.valueOf(
-                        bcp.getTamanoPrograma()
-                )
-        );
-    }
-
-    private void limpiarDatos() {
-
-        modeloPrograma.setRowCount(0);
-
-        modeloMemoria.setRowCount(0);
-
-
-        lblPCValor.setText("-");
-
-        lblACValor.setText("0");
-
-        lblAXValor.setText("0");
-
-        lblBXValor.setText("0");
-
-        lblCXValor.setText("0");
-
-        lblDXValor.setText("0");
-
-        txtIR.setText("-");
-
-
-        lblPIDValor.setText("-");
-
-        lblEstadoBCPValor.setText("-");
-
-        lblBCPPCValor.setText("-");
-
-        lblBCPACValor.setText("-");
-
-        lblBCPAXValor.setText("-");
-
-        lblBCPBXValor.setText("-");
-
-        lblBCPCXValor.setText("-");
-
-        lblBCPDXValor.setText("-");
-
-        lblInicioProgramaValor.setText("-");
-
-        lblFinProgramaValor.setText("-");
-
-        lblTamanoProgramaValor.setText("-");
-    }
-
-
-    private void estadoInicial() {
-
-        btnCargarArchivo.setEnabled(false);
-
-        btnSiguiente.setEnabled(false);
-
-        btnEjecutarTodo.setEnabled(false);
-
-        btnReiniciar.setEnabled(false);
-
-        limpiarDatos();
-    }
-
-
-    private void mostrarError(
-            String mensaje
-    ) {
-
-        JOptionPane.showMessageDialog(
-                this,
-                mensaje,
-                "Error",
-                JOptionPane.ERROR_MESSAGE
-        );
-    }
-
-
-    public static void main(String[] args) {
-
-        SwingUtilities.invokeLater(
-                () -> new MainWindow()
-                        .setVisible(true)
-        );
     }
 }

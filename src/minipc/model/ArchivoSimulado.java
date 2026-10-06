@@ -16,7 +16,7 @@ public class ArchivoSimulado {
     private String nombre;
     private String contenido;
     private int direccionInicio;
-    private int tamano;
+    private int tamaño;
     private List<Instruccion> instrucciones;
 
     /**
@@ -36,7 +36,7 @@ public class ArchivoSimulado {
         this.nombre = nombre;
         this.contenido = "";
         this.direccionInicio = -1;
-        this.tamano = 0;
+        this.tamaño = 0;
     }
 
     /**
@@ -65,14 +65,14 @@ public class ArchivoSimulado {
         }
 
         this.contenido = contenido;
-        this.tamano = contenido.length();
+        this.tamaño = contenido.length();
     }
 
     /** Solo Almacenamiento modifica el contenido después de reservar su espacio. */
     void setPrograma(List<Instruccion> programa, String contenido, int pesoTotal) {
         this.instrucciones = Collections.unmodifiableList(new ArrayList<>(programa));
         this.contenido = contenido;
-        this.tamano = pesoTotal;
+        this.tamaño = pesoTotal;
     }
 
     public boolean esPrograma() {
@@ -88,7 +88,7 @@ public class ArchivoSimulado {
 
     /** Un archivo vacío o programa de peso cero conserva una posición mínima. */
     public int getEspacioOcupado() {
-        return Math.max(1, tamano);
+        return Math.max(1, tamaño);
     }
 
     /**
@@ -109,15 +109,15 @@ public class ArchivoSimulado {
     /**
      * Obtiene la suma de pesos para programas o la longitud del texto para datos.
      */
-    public int getTamano() {
-        return tamano;
+    public int getTamaño() {
+        return tamaño;
     }
 
     @Override
     public String toString() {
         return "Archivo=" + nombre
                 + " Direccion=" + direccionInicio
-                + " Tamano=" + tamano
+                + " Tamaño=" + tamaño
                 + " Contenido=\"" + contenido + "\"";
     }
 }

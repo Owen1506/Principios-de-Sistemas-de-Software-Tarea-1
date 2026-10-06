@@ -1,0 +1,4 @@
+MOV AX, 1
+JMP 100
+MOV AX, 2
+INT 20H

@@ -71,22 +71,22 @@ public class GestorProcesos {
         this.maxProcesosEnRam = configuracion.getMaxProcesosEnRam();
     }
 
-    public List<BCP> getProcesosResidentes() {
-        List<BCP> residentes = new ArrayList<>();
+    public List<BCP> getProcesosEnRAM() {
+        List<BCP> procesosEnRAM = new ArrayList<>();
         for (BCP proceso : listaTrabajos) {
             if (proceso.getEstado() != EstadoProceso.FINALIZADO
                     && proceso.getEstado() != EstadoProceso.PREPARADO_SUSPENDIDO
                     && proceso.getEstado() != EstadoProceso.BLOQUEADO_SUSPENDIDO
                     && proceso.getInicioPrograma() >= 0) {
-                residentes.add(proceso);
+                procesosEnRAM.add(proceso);
             }
         }
-        return residentes;
+        return procesosEnRAM;
     }
 
     public boolean hayEspacioParaPrograma(int cantidad) {
-        List<BCP> residentes = getProcesosResidentes();
-        if (cantidad <= 0 || residentes.size() >= maxProcesosEnRam) {
+        List<BCP> procesosEnRAM = getProcesosEnRAM();
+        if (cantidad <= 0 || procesosEnRAM.size() >= maxProcesosEnRam) {
             return false;
         }
         return memoria.hayEspacioDisponible(cantidad);
@@ -98,17 +98,21 @@ public class GestorProcesos {
      * El proceso inicialmente queda en estado NUEVO.
      *
      * @param inicioPrograma dirección inicial del programa en memoria
-     * @param tamanoPrograma tamaño del programa
+     * @param tamañoPrograma tamaño del programa
      * @param prioridad prioridad asignada al proceso
      * @return BCP creado
      */
-    public BCP crearProceso(int inicioPrograma, int tamanoPrograma, int prioridad) {
+    public BCP crearProceso(int inicioPrograma, int tamañoPrograma, int prioridad) {
+
+        if (inicioPrograma >= 0 && getProcesosEnRAM().size() >= maxProcesosEnRam) {
+            throw new IllegalStateException("Se alcanzó el máximo de procesos en RAM.");
+        }
 
         if (contarProcesosActivos() >= maxProcesos) {
             throw new IllegalStateException("Se alcanzó el máximo de " + maxProcesos + " procesos.");
         }
 
-        BCP bcp = new BCP(siguientePid, inicioPrograma, tamanoPrograma);
+        BCP bcp = new BCP(siguientePid, inicioPrograma, tamañoPrograma);
 
         bcp.setPrioridad(prioridad);
 
@@ -122,8 +126,8 @@ public class GestorProcesos {
         return bcp;
     }
 
-    public BCP crearProcesoSuspendido(int tamanoPrograma, int prioridad) {
-        return crearProceso(-1, tamanoPrograma, prioridad);
+    public BCP crearProcesoSuspendido(int tamañoPrograma, int prioridad) {
+        return crearProceso(-1, tamañoPrograma, prioridad);
     }
 
     /** Deshace una admisión que todavía no llegó a preparar el proceso. */
@@ -307,12 +311,13 @@ public class GestorProcesos {
         colaPreparados.remove(bcp);
         bloqueados.remove(bcp);
 
-        memoria.liberarPrograma(bcp.getInicioPrograma(), bcp.getTamanoPrograma());
+        memoria.liberarPrograma(bcp.getInicioPrograma(), bcp.getTamañoPrograma());
 
         int direccionBCP = bcp.getDireccionBCP();
 
         if (direccionBCP != -1) {
             memoria.liberarBCP(direccionBCP);
+            bcp.setDireccionBCP(-1);
         }
 
         bcp.setDireccionSiguienteBCP(-1);

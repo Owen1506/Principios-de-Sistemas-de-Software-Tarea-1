@@ -96,7 +96,7 @@ public class GestorMemoriaVirtual {
         int inicioVirtual = almacenamiento.guardarProgramaVirtual(programa);
         registrarDireccionVirtual(proceso.getPid(), inicioVirtual);
 
-        memoria.liberarPrograma(proceso.getInicioPrograma(), proceso.getTamanoPrograma());
+        memoria.liberarPrograma(proceso.getInicioPrograma(), proceso.getTamañoPrograma());
 
         if (estadoAnterior == EstadoProceso.PREPARADO) {
             gestorProcesos.getColaPreparados().remove(proceso);
@@ -135,7 +135,7 @@ public class GestorMemoriaVirtual {
             throw new IllegalStateException("El proceso no se encuentra en un estado suspendido.");
         }
 
-        List<Instruccion> programa = almacenamiento.leerProgramaVirtual(inicioVirtual, proceso.getTamanoPrograma());
+        List<Instruccion> programa = almacenamiento.leerProgramaVirtual(inicioVirtual, proceso.getTamañoPrograma());
 
         /*
          * Si no existe RAM suficiente, cargarPrograma lanza una excepción.
@@ -149,7 +149,7 @@ public class GestorMemoriaVirtual {
 
         proceso.reubicarPrograma(nuevoInicio);
 
-        almacenamiento.liberarProgramaVirtual(inicioVirtual, proceso.getTamanoPrograma());
+        almacenamiento.liberarProgramaVirtual(inicioVirtual, proceso.getTamañoPrograma());
         eliminarDireccionVirtual(proceso.getPid());
 
         if (estadoAnterior == EstadoProceso.PREPARADO_SUSPENDIDO) {
@@ -188,7 +188,7 @@ public class GestorMemoriaVirtual {
         if (gestorProcesos.buscarProceso(proceso.getPid()) != proceso
                 || proceso.getEstado() != EstadoProceso.NUEVO
                 || proceso.getInicioPrograma() != -1
-                || programa.size() != proceso.getTamanoPrograma()) {
+                || programa.size() != proceso.getTamañoPrograma()) {
             throw new IllegalArgumentException("La admisión virtual no coincide con un proceso nuevo del gestor.");
         }
 
@@ -249,7 +249,7 @@ public class GestorMemoriaVirtual {
         for (List<Integer> entrada : direccionesVirtuales) {
             BCP proceso = gestorProcesos.buscarProceso(entrada.get(0));
             if (proceso != null) {
-                almacenamiento.liberarProgramaVirtual(entrada.get(1), proceso.getTamanoPrograma());
+                almacenamiento.liberarProgramaVirtual(entrada.get(1), proceso.getTamañoPrograma());
             }
         }
         direccionesVirtuales.clear();

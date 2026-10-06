@@ -336,6 +336,13 @@ public class Executor {
 
         BCP proceso = obtenerProcesoActual();
 
+        if (instruccion.getParametros().size()
+                > proceso.getPila().getCapacidad() - proceso.getPila().getCantidad()) {
+            throw new IllegalStateException("Desbordamiento de pila en PARAM: necesita "
+                    + instruccion.getParametros().size() + " posiciones y quedan "
+                    + (proceso.getPila().getCapacidad() - proceso.getPila().getCantidad()) + ".");
+        }
+
         for (Integer parametro : instruccion.getParametros()) {
             proceso.getPila().push(parametro);
         }

@@ -12,7 +12,7 @@ import java.util.Collections;
  * - Área del Sistema Operativo: almacena los BCP de los procesos.
  * - Área de usuario: almacena las instrucciones de los programas.
  *
- * Cada BCP ocupa una posición lógica dentro del área del S.O.
+ * Cada atributo del BCP ocupa una posición lógica dentro del área del S.O.
  * y cada instrucción ocupa una posición lógica dentro del área de usuario.
  */
 public class Memoria {
@@ -112,7 +112,7 @@ public class Memoria {
     /**
      * Guarda un BCP dentro del espacio reservado para el S.O.
      *
-     * Cada BCP ocupa una única posición lógica.
+     * Reserva un bloque consecutivo con una posición por atributo del BCP.
      *
      * @param bcp BCP que se desea almacenar
      * @return dirección donde fue almacenado
@@ -123,12 +123,15 @@ public class Memoria {
             throw new IllegalArgumentException("El BCP no puede ser null.");
         }
 
+        int cantidad = BCP.getTamañoKernel();
+        int consecutivos = 0;
         for (int i = 0; i < inicioUsuario; i++) {
-
-            if (areaSistema.get(i) == null) {
-                areaSistema.set(i, bcp);
-                bcp.setDireccionBCP(i);
-                return i;
+            consecutivos = areaSistema.get(i) == null ? consecutivos + 1 : 0;
+            if (consecutivos == cantidad) {
+                int inicio = i - cantidad + 1;
+                for (int j = 0; j < cantidad; j++) areaSistema.set(inicio + j, bcp);
+                bcp.setDireccionBCP(inicio);
+                return inicio;
             }
         }
 
@@ -149,7 +152,7 @@ public class Memoria {
     }
 
     /**
-     * Libera la posición ocupada por un BCP.
+     * Libera todo el bloque ocupado por un BCP.
      *
      * @param direccion dirección del BCP
      */
@@ -159,8 +162,11 @@ public class Memoria {
 
         BCP bcp = areaSistema.get(direccion);
         if (bcp != null) {
+            int inicio = bcp.getDireccionBCP();
+            for (int i = 0; i < BCP.getTamañoKernel(); i++) {
+                areaSistema.set(inicio + i, null);
+            }
             bcp.setDireccionBCP(-1);
-            areaSistema.set(direccion, null);
         }
     }
 
@@ -194,11 +200,11 @@ public class Memoria {
      * Libera las posiciones utilizadas por un programa.
      *
      * @param inicio dirección inicial del programa
-     * @param tamanoPrograma cantidad de posiciones ocupadas
+     * @param tamañoPrograma cantidad de posiciones ocupadas
      */
-    public void liberarPrograma(int inicio, int tamanoPrograma) {
+    public void liberarPrograma(int inicio, int tamañoPrograma) {
 
-        for (int i = 0; i < tamanoPrograma; i++) {
+        for (int i = 0; i < tamañoPrograma; i++) {
 
             int direccion = inicio + i;
 
@@ -218,7 +224,7 @@ public class Memoria {
 
         if (direccion < inicioUsuario) {
             BCP bcp = areaSistema.get(direccion);
-            return bcp == null ? "" : "BCP PID " + bcp.getPid();
+            return bcp == null ? "" : bcp.obtenerAtributoKernel(direccion - bcp.getDireccionBCP());
         }
         Instruccion instruccion = areaUsuario.get(direccion - inicioUsuario);
         return instruccion == null ? "" : instruccion.getOperacion();

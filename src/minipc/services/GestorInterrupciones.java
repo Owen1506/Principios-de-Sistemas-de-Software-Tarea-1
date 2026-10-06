@@ -6,6 +6,8 @@ import minipc.model.Instruccion;
 
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Administra las interrupciones generadas durante la ejecución
@@ -27,6 +29,7 @@ public class GestorInterrupciones {
 
     private Queue<BCP> esperandoTeclado;
     private String ultimaSalida;
+    private final List<String> salidas = new ArrayList<>();
 
     public GestorInterrupciones(CPU cpu, GestorProcesos gestorProcesos, Despachador despachador, SistemaArchivos sistemaArchivos) {
 
@@ -172,6 +175,7 @@ public class GestorInterrupciones {
      */
     private void atenderINT10() {
         ultimaSalida = cpu.getRegistros().getDX();
+        salidas.add(ultimaSalida);
     }
 
     /**
@@ -212,11 +216,16 @@ public class GestorInterrupciones {
     }
 
     public void reiniciar() {
+        salidas.clear();
         esperandoTeclado.clear();
         ultimaSalida = "";
     }
 
     public boolean hayProcesoEsperandoTeclado() {
         return !esperandoTeclado.isEmpty();
+    }
+
+    public List<String> getSalidas() {
+        return new ArrayList<>(salidas);
     }
 }

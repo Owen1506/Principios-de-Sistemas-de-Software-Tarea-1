@@ -27,7 +27,6 @@ import java.util.List;
  * posteriormente para realizar cambios de contexto entre procesos.
  */
 public class BCP {
-
     private int pid;
     private EstadoProceso estado;
 
@@ -47,7 +46,7 @@ public class BCP {
     // Información del programa en memoria
     private int inicioPrograma;
     private int finPrograma;
-    private int tamanoPrograma;
+    private int tamañoPrograma;
 
     // Información del proceso
     private int prioridad;
@@ -61,11 +60,54 @@ public class BCP {
     private LocalDateTime horaInicio;
     private LocalDateTime horaFinal;
     private int tiempoCPU;
+    private String motivoError = "";
+
+    public String getMotivoError() { return motivoError; }
+
+    public void setMotivoError(String motivoError) { this.motivoError = motivoError; }
 
     // Archivos abiertos por el proceso
     private List<String> archivosAbiertos;
 
     private boolean zeroFlag;
+
+    /** Una posición de kernel por atributo normal del BCP. */
+    public static int getTamañoKernel() {
+        return 24;
+    }
+
+    /** Lee el valor actual, sin mantener una copia desactualizada del contexto. */
+    public String obtenerAtributoKernel(int desplazamiento) {
+        String atributo = switch (desplazamiento) {
+            case 0 -> "PID = " + pid;
+            case 1 -> "ESTADO = " + estado;
+            case 2 -> "PC = " + pc;
+            case 3 -> "IR = " + ir;
+            case 4 -> "AC = " + ac;
+            case 5 -> "AX = " + ax;
+            case 6 -> "BX = " + bx;
+            case 7 -> "CX = " + cx;
+            case 8 -> "DX = " + dx;
+            case 9 -> "AH = " + ah;
+            case 10 -> "AL = " + al;
+            case 11 -> "INICIO_PROGRAMA = " + inicioPrograma;
+            case 12 -> "FIN_PROGRAMA = " + finPrograma;
+            case 13 -> "TAMAÑO_PROGRAMA = " + tamañoPrograma;
+            case 14 -> "PRIORIDAD = " + prioridad;
+            case 15 -> "PILA = " + pila;
+            case 16 -> "DIRECCION_BCP = " + direccionBCP;
+            case 17 -> "DIRECCION_SIGUIENTE_BCP = " + direccionSiguienteBCP;
+            case 18 -> "HORA_INICIO = " + (horaInicio == null ? "Pendiente" : horaInicio);
+            case 19 -> "HORA_FINAL = " + (horaFinal == null ? "Pendiente" : horaFinal);
+            case 20 -> "TIEMPO_CPU = " + tiempoCPU;
+            case 21 -> "ARCHIVOS_ABIERTOS = " + archivosAbiertos;
+            case 22 -> "ZERO_FLAG = " + zeroFlag;
+            case 23 -> "MOTIVO_ERROR = " + motivoError;
+            default -> throw new IllegalArgumentException("Posición de atributo del BCP inválida: " + desplazamiento);
+        };
+        return "PID " + pid + " | " + atributo;
+    }
+
 
     /**
      * Crea un nuevo Bloque de Control de Proceso.
@@ -77,9 +119,9 @@ public class BCP {
      * @param pid identificador único del proceso
      * @param inicioPrograma dirección inicial del programa en memoria,
      *                       o -1 si aún no está cargado en RAM
-     * @param tamanoPrograma cantidad de posiciones de memoria ocupadas
+     * @param tamañoPrograma cantidad de posiciones de memoria ocupadas
      */
-    public BCP(int pid, int inicioPrograma, int tamanoPrograma) {
+    public BCP(int pid, int inicioPrograma, int tamañoPrograma) {
 
         if (pid <= 0) {
             throw new IllegalArgumentException("El PID debe ser mayor que cero.");
@@ -89,7 +131,7 @@ public class BCP {
             throw new IllegalArgumentException("La dirección inicial del programa no es válida.");
         }
 
-        if (tamanoPrograma <= 0) {
+        if (tamañoPrograma <= 0) {
             throw new IllegalArgumentException("El tamaño del programa debe ser mayor que cero.");
         }
 
@@ -97,14 +139,14 @@ public class BCP {
         this.estado = EstadoProceso.NUEVO;
 
         this.inicioPrograma = inicioPrograma;
-        this.tamanoPrograma = tamanoPrograma;
+        this.tamañoPrograma = tamañoPrograma;
 
         if (inicioPrograma == -1) {
             this.pc = -1;
             this.finPrograma = -1;
         } else {
             this.pc = inicioPrograma;
-            this.finPrograma = inicioPrograma + tamanoPrograma - 1;
+            this.finPrograma = inicioPrograma + tamañoPrograma - 1;
         }
 
         this.ir = "";
@@ -238,7 +280,7 @@ public class BCP {
         }
 
         this.inicioPrograma = nuevoInicio;
-        this.finPrograma = nuevoInicio + tamanoPrograma - 1;
+        this.finPrograma = nuevoInicio + tamañoPrograma - 1;
         this.pc = nuevoInicio + desplazamientoPC;
     }
 
@@ -250,8 +292,8 @@ public class BCP {
         return finPrograma;
     }
 
-    public int getTamanoPrograma() {
-        return tamanoPrograma;
+    public int getTamañoPrograma() {
+        return tamañoPrograma;
     }
 
     public int getPrioridad() {
@@ -314,6 +356,12 @@ public class BCP {
         tiempoCPU++;
     }
 
+    /** Duración real final, en segundos; no confundir con los ticks de CPU. */
+    public double getTiempoTotalSegundos() {
+        Duration duracion = getTiempoTotal();
+        return duracion.getSeconds() + duracion.getNano() / 1_000_000_000.0;
+    }
+
     public List<String> getArchivosAbiertos() {
         return archivosAbiertos;
     }
@@ -332,6 +380,7 @@ public class BCP {
     public String toString() {
         return "PID=" + pid
                 + "\nEstado=" + estado
+                + "\nMotivo error=" + motivoError
                 + "\nPC=" + pc
                 + "\nIR=" + ir
                 + "\nAC=" + ac
@@ -344,14 +393,15 @@ public class BCP {
                 + " AL=" + al
                 + "\nInicio programa=" + inicioPrograma
                 + "\nFin programa=" + finPrograma
-                + "\nTamano programa=" + tamanoPrograma
+                + "\nTamaño programa=" + tamañoPrograma
                 + "\nPrioridad=" + prioridad
                 + "\nDireccion BCP=" + direccionBCP
                 + "\nDireccion siguiente BCP=" + direccionSiguienteBCP
                 + "\nPila=" + pila
-                + "\nTiempo CPU=" + tiempoCPU
+                + "\nTiempo CPU=" + tiempoCPU + " s"
                 + "\nHora inicio=" + horaInicio
                 + "\nHora final=" + horaFinal
+                + "\nDuracion real (s)=" + (horaFinal == null ? "Pendiente" : getTiempoTotalSegundos())
                 + "\nArchivos abiertos=" + archivosAbiertos;
     }
 }

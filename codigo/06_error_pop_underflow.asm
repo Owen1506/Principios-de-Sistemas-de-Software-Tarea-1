@@ -1,0 +1,2 @@
+POP AX
+INT 20H

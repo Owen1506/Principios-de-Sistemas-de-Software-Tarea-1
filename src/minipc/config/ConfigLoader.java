@@ -18,7 +18,8 @@ public class ConfigLoader {
                 entero(propiedades, "memoriaVirtual"), entero(propiedades, "indice"),
                 entero(propiedades, "inicioUsuario"),
                 entero(propiedades, "maxProcesosEnRam"), entero(propiedades, "maxProcesos"),
-                booleano(propiedades, "conservarArchivosAlReiniciar"));
+                booleano(propiedades, "conservarArchivosAlReiniciar"),
+                valor(propiedades, "algoritmo"));
     }
 
     private String valor(Properties propiedades, String clave) {
