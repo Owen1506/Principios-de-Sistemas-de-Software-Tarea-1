@@ -201,7 +201,7 @@ public class ASMValidator {
          * registro, valor
          * registro, registro
          */
-        String[] partes = operandos.split(",");
+        String[] partes = operandos.split(",", 2);
 
         if (partes.length != 2) {
             return "MOV debe tener el formato: " + "MOV REGISTRO, VALOR o MOV REGISTRO, REGISTRO";
@@ -265,36 +265,36 @@ public class ASMValidator {
         if (operando != null){
                 String registro = operando.trim().toUpperCase();
                 String registro2[] = operando.split(",");
-                if (operando.equals("AH") || operando.equals("AL")){
+                if (operando.toUpperCase().equals("AH") || operando.toUpperCase().equals("AL")){
                         if (!operacion.equals("MOV")){
                                 return operacion + " AH y AL solo pueden ser modificados por MOV";
                         }
                 }
                 
                 else if (operacion.equals("SWAP")){
-                        if (registro2.length < 2){
+                        if (registro2.length != 2){
                                 return operacion + " No hay registros o no estan separados por una coma. Ej SWAP AX, BX";
                         }
                         else {
-                                if (registro2[0].trim().equals(registro2[1].trim())){
+                                if (registro2[0].trim().equals(registro2[1].trim().toUpperCase())){
                                         return operacion + " Los registros son los mismos";
                                 }
-                                else if (!REGISTROS.contains(registro2[0].trim()) || !REGISTROS.contains(registro2[1].trim())) {
+                                else if (!REGISTROS.contains(registro2[0].trim().toUpperCase()) || !REGISTROS.contains(registro2[1].trim().toUpperCase())) {
                                         return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
                                 }
                         }
                 }
                 else if (operacion.equals("CMP")){
-                        if (registro2.length < 2){
+                        if (registro2.length != 2){
                                 return operacion + " No hay registros o no estan separados por una coma. Ej SWAP AX, BX";
                         }
-                        else if (!REGISTROS.contains(registro2[0].trim()) || !REGISTROS.contains(registro2[1].trim())) {
+                        else if (!REGISTROS.contains(registro2[0].trim().toUpperCase()) || !REGISTROS.contains(registro2[1].trim().toUpperCase())) {
                                 return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
                         }
                         
                 }
                 else if (operacion.equals("INT")){
-                        if (!SERVICIOS.contains(operando)){
+                        if (!SERVICIOS.contains(operando.trim().toUpperCase())){
                            return operacion + " debe recibir una llamada de sistema válido: " + "21H, 09H, 20H o 10H.";     
                         }
                 } 

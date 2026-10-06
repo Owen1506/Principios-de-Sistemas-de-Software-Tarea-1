@@ -273,7 +273,23 @@ public class Executor {
      * Salto relativo.
      */
     private void ejecutarJMP(Instruccion instruccion) {
-        cpu.setPC(cpu.getPC() + instruccion.getValor());
+        aplicarSalto(instruccion);
+    }
+
+    /** Valida el destino antes de modificar el PC, dentro del programa actual. */
+    private void aplicarSalto(Instruccion instruccion) {
+        BCP proceso = obtenerProcesoActual();
+        // ASMValidator ya comprobó que el desplazamiento es numérico antes del parseo.
+        // Usa long para detectar también el desbordamiento de un desplazamiento int.
+        long destino = (long) cpu.getPC() + instruccion.getValor();
+        if (destino < proceso.getInicioPrograma() || destino > proceso.getFinPrograma()) {
+            throw new IllegalStateException("Salto " + instruccion.getOperacion()
+                    + " fuera de rango en PID " + proceso.getPid()
+                    + ": PC=" + cpu.getPC() + ", destino=" + destino
+                    + ", rango permitido=" + proceso.getInicioPrograma()
+                    + ".." + proceso.getFinPrograma());
+        }
+        cpu.setPC((int) destino);
     }
 
     /**
@@ -293,7 +309,7 @@ public class Executor {
     private boolean ejecutarJE(Instruccion instruccion) {
 
         if (cpu.isZeroFlag()) {
-            cpu.setPC(cpu.getPC() + instruccion.getValor());
+            aplicarSalto(instruccion);
             return true;
         }
 
@@ -306,7 +322,7 @@ public class Executor {
     private boolean ejecutarJNE(Instruccion instruccion) {
 
         if (!cpu.isZeroFlag()) {
-            cpu.setPC(cpu.getPC() + instruccion.getValor());
+            aplicarSalto(instruccion);
             return true;
         }
 
