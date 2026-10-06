@@ -413,10 +413,9 @@ public class MainWindow extends JFrame {
 
         modeloPrograma =
                 new DefaultTableModel(
-                        new Object[]{
+                        new String[]{
                                 "Dir.",
-                                "ASM",
-                                "Binario"
+                                "ASM"
                         },
                         0
                 ) {
@@ -501,7 +500,7 @@ public class MainWindow extends JFrame {
 
         modeloMemoria =
                 new DefaultTableModel(
-                        new Object[]{
+                        new String[]{
                                 "Dirección",
                                 "Tipo",
                                 "Contenido"
@@ -1288,10 +1287,9 @@ public class MainWindow extends JFrame {
 
 
             modeloPrograma.addRow(
-                    new Object[]{
-                            inicio + i,
-                            instruccion.toString(),
-                            instruccion.getBinario()
+                    new String[]{
+                            String.valueOf(inicio + i),
+                            instruccion.getTextoOriginal()
                     }
             );
         }
@@ -1357,8 +1355,8 @@ public class MainWindow extends JFrame {
             if (i < inicioUsuario) {
 
                 modeloMemoria.addRow(
-                        new Object[]{
-                                i,
+                        new String[]{
+                                String.valueOf(i),
                                 "S.O.",
                                 "Reservado"
                         }
@@ -1375,8 +1373,8 @@ public class MainWindow extends JFrame {
             if (instruccion == null) {
 
                 modeloMemoria.addRow(
-                        new Object[]{
-                                i,
+                        new String[]{
+                                String.valueOf(i),
                                 "Usuario",
                                 "Libre"
                         }
@@ -1385,8 +1383,8 @@ public class MainWindow extends JFrame {
             } else {
 
                 modeloMemoria.addRow(
-                        new Object[]{
-                                i,
+                        new String[]{
+                                String.valueOf(i),
                                 "Usuario",
                                 instruccion.toString()
                         }

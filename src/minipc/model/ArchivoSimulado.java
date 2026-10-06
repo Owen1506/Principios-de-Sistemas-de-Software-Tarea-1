@@ -1,5 +1,9 @@
 package minipc.model;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Representa un archivo almacenado dentro de la unidad
  * de almacenamiento secundaria de la Mini PC.
@@ -13,6 +17,7 @@ public class ArchivoSimulado {
     private String contenido;
     private int direccionInicio;
     private int tamano;
+    private List<Instruccion> instrucciones;
 
     /**
      * Crea un nuevo archivo simulado.
@@ -53,7 +58,7 @@ public class ArchivoSimulado {
      *
      * El tamaño se actualiza automáticamente.
      */
-    public void setContenido(String contenido) {
+    void setContenido(String contenido) {
 
         if (contenido == null) {
             contenido = "";
@@ -61,6 +66,29 @@ public class ArchivoSimulado {
 
         this.contenido = contenido;
         this.tamano = contenido.length();
+    }
+
+    /** Solo Almacenamiento modifica el contenido después de reservar su espacio. */
+    void setPrograma(List<Instruccion> programa, String contenido, int pesoTotal) {
+        this.instrucciones = Collections.unmodifiableList(new ArrayList<>(programa));
+        this.contenido = contenido;
+        this.tamano = pesoTotal;
+    }
+
+    public boolean esPrograma() {
+        return instrucciones != null;
+    }
+
+    public List<Instruccion> getInstrucciones() {
+        if (!esPrograma()) {
+            throw new IllegalStateException("El archivo no contiene un programa ASM.");
+        }
+        return new ArrayList<>(instrucciones);
+    }
+
+    /** Un archivo vacío o programa de peso cero conserva una posición mínima. */
+    public int getEspacioOcupado() {
+        return Math.max(1, tamano);
     }
 
     /**
@@ -74,12 +102,12 @@ public class ArchivoSimulado {
     /**
      * Asigna la dirección inicial del archivo.
      */
-    public void setDireccionInicio(int direccionInicio) {
+    void setDireccionInicio(int direccionInicio) {
         this.direccionInicio = direccionInicio;
     }
 
     /**
-     * Obtiene el tamaño actual del archivo.
+     * Obtiene la suma de pesos para programas o la longitud del texto para datos.
      */
     public int getTamano() {
         return tamano;

@@ -3,6 +3,7 @@ package minipc.services;
 import minipc.model.BCP;
 import minipc.model.EstadoProceso;
 import minipc.model.Memoria;
+import minipc.config.Configuracion;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -22,7 +23,8 @@ import java.util.Queue;
  */
 public class GestorProcesos {
 
-    private static final int MAX_PROCESOS = 5;
+    private final int maxProcesos;
+    private int maxProcesosEnRam = 5;
 
     private int siguientePid;
 
@@ -40,12 +42,20 @@ public class GestorProcesos {
      * @param memoria memoria principal de la Mini PC
      */
     public GestorProcesos(Memoria memoria) {
+        this(memoria, 5);
+    }
+
+    public GestorProcesos(Memoria memoria, int maxProcesos) {
 
         if (memoria == null) {
             throw new IllegalArgumentException("La memoria no puede ser null.");
         }
 
         this.memoria = memoria;
+        if (maxProcesos <= 0) {
+            throw new IllegalArgumentException("El máximo de procesos debe ser positivo.");
+        }
+        this.maxProcesos = maxProcesos;
 
         this.siguientePid = 1;
 
@@ -54,6 +64,32 @@ public class GestorProcesos {
         this.bloqueados = new ArrayList<>();
 
         this.procesoActual = null;
+    }
+
+    public GestorProcesos(Memoria memoria, Configuracion configuracion) {
+        this(memoria, configuracion.getMaxProcesos());
+        this.maxProcesosEnRam = configuracion.getMaxProcesosEnRam();
+    }
+
+    public List<BCP> getProcesosResidentes() {
+        List<BCP> residentes = new ArrayList<>();
+        for (BCP proceso : listaTrabajos) {
+            if (proceso.getEstado() != EstadoProceso.FINALIZADO
+                    && proceso.getEstado() != EstadoProceso.PREPARADO_SUSPENDIDO
+                    && proceso.getEstado() != EstadoProceso.BLOQUEADO_SUSPENDIDO
+                    && proceso.getInicioPrograma() >= 0) {
+                residentes.add(proceso);
+            }
+        }
+        return residentes;
+    }
+
+    public boolean hayEspacioParaPrograma(int cantidad) {
+        List<BCP> residentes = getProcesosResidentes();
+        if (cantidad <= 0 || residentes.size() >= maxProcesosEnRam) {
+            return false;
+        }
+        return memoria.hayEspacioDisponible(cantidad);
     }
 
     /**
@@ -68,16 +104,16 @@ public class GestorProcesos {
      */
     public BCP crearProceso(int inicioPrograma, int tamanoPrograma, int prioridad) {
 
-        if (contarProcesosActivos() >= MAX_PROCESOS) {
-            throw new IllegalStateException("Se alcanzó el máximo de " + MAX_PROCESOS + " procesos.");
+        if (contarProcesosActivos() >= maxProcesos) {
+            throw new IllegalStateException("Se alcanzó el máximo de " + maxProcesos + " procesos.");
         }
 
         BCP bcp = new BCP(siguientePid, inicioPrograma, tamanoPrograma);
-        siguientePid++;
 
         bcp.setPrioridad(prioridad);
 
         memoria.guardarBCP(bcp);
+        siguientePid++;
 
         listaTrabajos.add(bcp);
 
@@ -86,9 +122,55 @@ public class GestorProcesos {
         return bcp;
     }
 
+    public BCP crearProcesoSuspendido(int tamanoPrograma, int prioridad) {
+        return crearProceso(-1, tamanoPrograma, prioridad);
+    }
+
+    /** Deshace una admisión que todavía no llegó a preparar el proceso. */
+    public void descartarProcesoNuevo(BCP bcp) {
+        validarProceso(bcp);
+        if (bcp.getEstado() != EstadoProceso.NUEVO) {
+            throw new IllegalStateException("Solo se puede descartar una admisión incompleta.");
+        }
+        if (bcp.getDireccionBCP() != -1) {
+            memoria.liberarBCP(bcp.getDireccionBCP());
+        }
+        listaTrabajos.remove(bcp);
+        colaPreparados.remove(bcp);
+        bloqueados.remove(bcp);
+        bcp.setDireccionSiguienteBCP(-1);
+        if (bcp.getPid() == siguientePid - 1) {
+            siguientePid--;
+        }
+        actualizarEnlacesBCP();
+    }
+
+    public void cerrarArchivoEnTodosLosProcesos(String nombre) {
+        for (BCP bcp : listaTrabajos) {
+            bcp.cerrarArchivo(nombre);
+        }
+    }
+
+    public void reiniciar() {
+        for (BCP bcp : listaTrabajos) {
+            if (bcp.getDireccionBCP() != -1) {
+                memoria.liberarBCP(bcp.getDireccionBCP());
+            }
+            bcp.setDireccionSiguienteBCP(-1);
+            bcp.getArchivosAbiertos().clear();
+        }
+        listaTrabajos.clear();
+        colaPreparados.clear();
+        bloqueados.clear();
+        procesoActual = null;
+        siguientePid = 1;
+    }
+
     /**
-     * Cambia un proceso al estado PREPARADO y lo agrega
+     * Cambia un proceso NUEVO al estado PREPARADO y lo agrega
      * a la cola de preparados.
+     *
+     * Un proceso suspendido debe regresar primero desde memoria virtual.
      *
      * @param bcp proceso que se desea preparar
      */
@@ -100,7 +182,18 @@ public class GestorProcesos {
             throw new IllegalStateException("No se puede preparar un proceso finalizado.");
         }
 
-        bloqueados.remove(bcp);
+        if (bcp.getEstado() == EstadoProceso.PREPARADO_SUSPENDIDO
+                || bcp.getEstado() == EstadoProceso.BLOQUEADO_SUSPENDIDO) {
+            throw new IllegalStateException("El proceso debe regresar de memoria virtual antes de pasar a preparado.");
+        }
+
+        if (bcp.getEstado() == EstadoProceso.EJECUCION) {
+            throw new IllegalStateException("El proceso ya se encuentra en ejecución.");
+        }
+
+        if (bcp.getEstado() == EstadoProceso.BLOQUEADO) {
+            throw new IllegalStateException("Un proceso bloqueado debe ser desbloqueado antes de pasar a preparado.");
+        }
 
         bcp.setEstado(EstadoProceso.PREPARADO);
 
@@ -112,7 +205,6 @@ public class GestorProcesos {
     /**
      * Marca un proceso como el proceso actualmente en ejecución.
      *
-     * Normalmente este método será utilizado por el Despachador.
      *
      * @param bcp proceso que recibe la CPU
      */
@@ -124,8 +216,11 @@ public class GestorProcesos {
             throw new IllegalStateException("Ya existe un proceso utilizando la CPU.");
         }
 
-        colaPreparados.remove(bcp);
+        if (bcp.getEstado() != EstadoProceso.PREPARADO) {
+            throw new IllegalStateException("Solo un proceso preparado puede pasar a ejecución.");
+        }
 
+        colaPreparados.remove(bcp);
         bcp.setEstado(EstadoProceso.EJECUCION);
 
         if (bcp.getHoraInicio() == null) {
@@ -157,7 +252,13 @@ public class GestorProcesos {
     }
 
     /**
-     * Desbloquea un proceso y lo devuelve a la cola de preparados.
+     * Desbloquea un proceso cuando termina el evento que esperaba.
+     *
+     * Si está en memoria principal:
+     * BLOQUEADO -> PREPARADO.
+     *
+     * Si continúa en memoria virtual:
+     * BLOQUEADO_SUSPENDIDO -> PREPARADO_SUSPENDIDO.
      *
      * @param bcp proceso que terminó de esperar el evento
      */
@@ -165,17 +266,24 @@ public class GestorProcesos {
 
         validarProceso(bcp);
 
-        if (bcp.getEstado() != EstadoProceso.BLOQUEADO) {
-            throw new IllegalStateException("El proceso no se encuentra bloqueado.");
+        if (bcp.getEstado() == EstadoProceso.BLOQUEADO) {
+
+            bloqueados.remove(bcp);
+            bcp.setEstado(EstadoProceso.PREPARADO);
+
+            if (!colaPreparados.contains(bcp)) {
+                colaPreparados.add(bcp);
+            }
+
+            return;
         }
 
-        bloqueados.remove(bcp);
-
-        bcp.setEstado(EstadoProceso.PREPARADO);
-
-        if (!colaPreparados.contains(bcp)) {
-            colaPreparados.add(bcp);
+        if (bcp.getEstado() == EstadoProceso.BLOQUEADO_SUSPENDIDO) {
+            bcp.setEstado(EstadoProceso.PREPARADO_SUSPENDIDO);
+            return;
         }
+
+        throw new IllegalStateException("El proceso no se encuentra bloqueado.");
     }
 
     /**
@@ -194,6 +302,7 @@ public class GestorProcesos {
 
         bcp.setEstado(EstadoProceso.FINALIZADO);
         bcp.setHoraFinal(LocalDateTime.now());
+        bcp.getArchivosAbiertos().clear();
 
         colaPreparados.remove(bcp);
         bloqueados.remove(bcp);

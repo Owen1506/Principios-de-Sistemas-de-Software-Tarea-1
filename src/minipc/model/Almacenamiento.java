@@ -1,5 +1,9 @@
 package minipc.model;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Collections;
+
 /**
  * Simula la unidad de almacenamiento secundario de la Mini PC.
  *
@@ -19,7 +23,10 @@ public class Almacenamiento {
     private int tamanoMemoriaVirtual;
     private int inicioMemoriaVirtual;
 
-    private Object[] almacenamiento;
+    private int tamanoArchivos;
+    private List<EntradaIndice> indiceArchivos;
+    private List<ArchivoSimulado> archivos;
+    private List<Instruccion> memoriaVirtual;
 
     /**
      * Representa una entrada del índice de archivos.
@@ -69,7 +76,7 @@ public class Almacenamiento {
             throw new IllegalArgumentException("El tamaño de memoria virtual no puede ser negativo.");
         }
 
-        if (tamanoIndice + tamanoMemoriaVirtual >= size) {
+        if ((long) tamanoIndice + tamanoMemoriaVirtual >= size) {
             throw new IllegalArgumentException("No existe espacio suficiente para almacenar archivos.");
         }
 
@@ -78,47 +85,71 @@ public class Almacenamiento {
         this.tamanoMemoriaVirtual = tamanoMemoriaVirtual;
         this.inicioMemoriaVirtual = size - tamanoMemoriaVirtual;
 
-        this.almacenamiento = new Object[size];
+        this.tamanoArchivos = size - tamanoIndice - tamanoMemoriaVirtual;
+        this.indiceArchivos = new ArrayList<>(Collections.<EntradaIndice>nCopies(tamanoIndice, null));
+        this.archivos = new ArrayList<>(Collections.<ArchivoSimulado>nCopies(tamanoArchivos, null));
+        this.memoriaVirtual = new ArrayList<>(Collections.<Instruccion>nCopies(tamanoMemoriaVirtual, null));
     }
 
     /**
      * Crea un archivo nuevo dentro del almacenamiento.
      *
      * El archivo se registra en el índice y posteriormente
-     * se almacena en una posición libre.
+     * se almacena en un bloque libre con el tamaño que necesita.
      *
      * @param nombre nombre del archivo
      * @return archivo creado
      */
     public ArchivoSimulado crearArchivo(String nombre) {
+        return registrarArchivo(new ArchivoSimulado(nombre));
+    }
 
-        if (nombre == null || nombre.trim().isEmpty()) {
-            throw new IllegalArgumentException("El nombre del archivo no puede estar vacío.");
+    /** Guarda una copia del programa en disco; tamaño = suma de pesos. */
+    public ArchivoSimulado guardarPrograma(String nombre, List<Instruccion> programa) {
+        if (programa == null || programa.isEmpty() || programa.contains(null)) {
+            throw new IllegalArgumentException("El programa debe contener instrucciones válidas.");
         }
-
-        if (existeArchivo(nombre)) {
-            throw new IllegalStateException("Ya existe un archivo con el nombre: " + nombre);
+        long peso = 0;
+        List<String> lineas = new ArrayList<>();
+        for (Instruccion instruccion : programa) {
+            if (instruccion.getPeso() < 0 || instruccion.getTextoOriginal() == null) {
+                throw new IllegalArgumentException("La instrucción debe tener texto ASM y peso no negativo.");
+            }
+            peso += instruccion.getPeso();
+            if (peso > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("El peso del programa supera el tamaño permitido.");
+            }
+            lineas.add(instruccion.getTextoOriginal());
         }
+        ArchivoSimulado archivo = new ArchivoSimulado(nombre);
+        archivo.setPrograma(programa, String.join("\n", lineas), (int) peso);
+        return registrarArchivo(archivo);
+    }
 
+    private ArchivoSimulado registrarArchivo(ArchivoSimulado archivo) {
+        if (existeArchivo(archivo.getNombre())) {
+            throw new IllegalStateException("Ya existe un archivo con el nombre: " + archivo.getNombre());
+        }
         int posicionIndice = buscarPosicionIndiceLibre();
-
         if (posicionIndice == -1) {
             throw new IllegalStateException("No hay espacio disponible en el índice de archivos.");
         }
-
-        int direccionArchivo = buscarPosicionArchivoLibre();
-
-        if (direccionArchivo == -1) {
-            throw new IllegalStateException("No hay espacio disponible para almacenar el archivo.");
+        int direccion = buscarBloqueArchivoLibre(archivo.getEspacioOcupado(), null);
+        if (direccion == -1) {
+            throw new IllegalStateException("No hay un bloque suficiente para almacenar el archivo: " + archivo.getNombre());
         }
-
-        ArchivoSimulado archivo = new ArchivoSimulado(nombre);
-        archivo.setDireccionInicio(direccionArchivo);
-
-        almacenamiento[posicionIndice] = new EntradaIndice(nombre, direccionArchivo);
-        almacenamiento[direccionArchivo] = archivo;
-
+        archivo.setDireccionInicio(direccion);
+        ocuparBloqueArchivo(archivo);
+        indiceArchivos.set(posicionIndice, new EntradaIndice(archivo.getNombre(), direccion));
         return archivo;
+    }
+
+    public List<Instruccion> leerPrograma(String nombre) {
+        ArchivoSimulado archivo = buscarArchivo(nombre);
+        if (archivo == null) {
+            throw new IllegalStateException("El programa no existe en disco: " + nombre);
+        }
+        return archivo.getInstrucciones();
     }
 
     /**
@@ -135,14 +166,8 @@ public class Almacenamiento {
             return null;
         }
 
-        EntradaIndice entrada = (EntradaIndice) almacenamiento[posicionIndice];
-        Object contenido = almacenamiento[entrada.getDireccion()];
-
-        if (contenido instanceof ArchivoSimulado) {
-            return (ArchivoSimulado) contenido;
-        }
-
-        return null;
+        EntradaIndice entrada = indiceArchivos.get(posicionIndice);
+        return archivos.get(entrada.getDireccion() - tamanoIndice);
     }
 
     /**
@@ -166,7 +191,24 @@ public class Almacenamiento {
             throw new IllegalStateException("El archivo no existe: " + nombre);
         }
 
-        archivo.setContenido(contenido);
+        if (archivo.esPrograma()) {
+            throw new IllegalStateException("No se puede modificar un programa ASM con el servicio de escritura de texto.");
+        }
+        String nuevoContenido = contenido == null ? "" : contenido;
+        int nuevoEspacio = Math.max(1, nuevoContenido.length());
+        int direccion = archivo.getDireccionInicio();
+        if (!bloqueArchivoDisponible(direccion, nuevoEspacio, archivo)) {
+            direccion = buscarBloqueArchivoLibre(nuevoEspacio, archivo);
+        }
+        if (direccion == -1) {
+            throw new IllegalStateException("No hay espacio suficiente para escribir el archivo: " + nombre);
+        }
+        // Ninguna modificación se realiza antes de comprobar el bloque completo.
+        liberarBloqueArchivo(archivo);
+        archivo.setContenido(nuevoContenido);
+        archivo.setDireccionInicio(direccion);
+        ocuparBloqueArchivo(archivo);
+        indiceArchivos.set(buscarEntradaIndice(nombre), new EntradaIndice(nombre, direccion));
     }
 
     /**
@@ -200,10 +242,114 @@ public class Almacenamiento {
             throw new IllegalStateException("El archivo no existe: " + nombre);
         }
 
-        EntradaIndice entrada = (EntradaIndice) almacenamiento[posicionIndice];
+        EntradaIndice entrada = indiceArchivos.get(posicionIndice);
 
-        almacenamiento[entrada.getDireccion()] = null;
-        almacenamiento[posicionIndice] = null;
+        ArchivoSimulado archivo = archivos.get(entrada.getDireccion() - tamanoIndice);
+        liberarBloqueArchivo(archivo);
+        archivo.setDireccionInicio(-1);
+        indiceArchivos.set(posicionIndice, null);
+    }
+
+    public boolean hayEspacioVirtualDisponible(int cantidad) {
+        return cantidad > 0 && buscarEspacioVirtualLibre(cantidad) != -1;
+    }
+
+    /**
+     * Guarda las instrucciones de un programa dentro de memoria virtual.
+     *
+     * @return dirección inicial dentro de memoria virtual
+     */
+    public int guardarProgramaVirtual(List<Instruccion> programa) {
+
+        if (programa == null || programa.isEmpty()) {
+            throw new IllegalArgumentException("El programa está vacío.");
+        }
+
+        if (programa.contains(null)) {
+            throw new IllegalArgumentException("El programa contiene instrucciones null.");
+        }
+
+        int inicio = buscarEspacioVirtualLibre(programa.size());
+
+        if (inicio == -1) {
+            throw new IllegalStateException("No hay espacio suficiente en memoria virtual.");
+        }
+
+        for (int i = 0; i < programa.size(); i++) {
+            memoriaVirtual.set(inicio + i - inicioMemoriaVirtual, programa.get(i));
+        }
+
+        return inicio;
+    }
+
+    /**
+     * Lee un programa almacenado en memoria virtual.
+     */
+    public List<Instruccion> leerProgramaVirtual(int inicio, int tamano) {
+
+        List<Instruccion> programa = new ArrayList<>();
+
+        if (tamano < 0 || inicio < inicioMemoriaVirtual || inicio > size || tamano > size - inicio) {
+            throw new IllegalArgumentException("El bloque solicitado no pertenece a memoria virtual.");
+        }
+
+        for (int i = 0; i < tamano; i++) {
+
+            Instruccion contenido = memoriaVirtual.get(inicio + i - inicioMemoriaVirtual);
+
+            if (contenido == null) {
+                throw new IllegalStateException("No existe una instrucción virtual en la dirección " + (inicio + i));
+            }
+
+            programa.add(contenido);
+        }
+
+        return programa;
+    }
+
+    /**
+     * Libera un programa almacenado en memoria virtual.
+     */
+    public void liberarProgramaVirtual(int inicio, int tamano) {
+
+        if (tamano < 0 || inicio < inicioMemoriaVirtual || inicio > size || tamano > size - inicio) {
+            throw new IllegalArgumentException("El bloque solicitado no pertenece a memoria virtual.");
+        }
+
+        for (int i = 0; i < tamano; i++) {
+            memoriaVirtual.set(inicio + i - inicioMemoriaVirtual, null);
+        }
+    }
+
+    /**
+     * Busca un bloque consecutivo dentro de memoria virtual.
+     */
+    private int buscarEspacioVirtualLibre(int cantidad) {
+
+        int consecutivos = 0;
+        int posibleInicio = -1;
+
+        for (int i = inicioMemoriaVirtual; i < size; i++) {
+
+            if (memoriaVirtual.get(i - inicioMemoriaVirtual) == null) {
+
+                if (consecutivos == 0) {
+                    posibleInicio = i;
+                }
+
+                consecutivos++;
+
+                if (consecutivos == cantidad) {
+                    return posibleInicio;
+                }
+
+            } else {
+                consecutivos = 0;
+                posibleInicio = -1;
+            }
+        }
+
+        return -1;
     }
 
     /**
@@ -215,9 +361,9 @@ public class Almacenamiento {
 
         for (int i = 0; i < tamanoIndice; i++) {
 
-            if (almacenamiento[i] instanceof EntradaIndice) {
+            if (indiceArchivos.get(i) != null) {
 
-                EntradaIndice entrada = (EntradaIndice) almacenamiento[i];
+                EntradaIndice entrada = indiceArchivos.get(i);
 
                 if (entrada.getNombre().equals(nombre)) {
                     return i;
@@ -235,7 +381,7 @@ public class Almacenamiento {
 
         for (int i = 0; i < tamanoIndice; i++) {
 
-            if (almacenamiento[i] == null) {
+            if (indiceArchivos.get(i) == null) {
                 return i;
             }
         }
@@ -243,20 +389,65 @@ public class Almacenamiento {
         return -1;
     }
 
-    /**
-     * Busca una posición disponible en el espacio destinado
-     * al almacenamiento de archivos.
-     */
-    private int buscarPosicionArchivoLibre() {
-
-        for (int i = tamanoIndice; i < inicioMemoriaVirtual; i++) {
-
-            if (almacenamiento[i] == null) {
-                return i;
+    private boolean bloqueArchivoDisponible(int inicio, int cantidad, ArchivoSimulado ignorado) {
+        if (cantidad <= 0 || inicio < tamanoIndice || cantidad > inicioMemoriaVirtual - inicio) {
+            return false;
+        }
+        for (int i = inicio; i < inicio + cantidad; i++) {
+            ArchivoSimulado ocupante = archivos.get(i - tamanoIndice);
+            if (ocupante != null && ocupante != ignorado) {
+                return false;
             }
         }
+        return true;
+    }
 
+    private int buscarBloqueArchivoLibre(int cantidad, ArchivoSimulado ignorado) {
+        if (cantidad <= 0 || cantidad > tamanoArchivos) {
+            return -1;
+        }
+        int consecutivos = 0;
+        for (int i = 0; i < archivos.size(); i++) {
+            if (archivos.get(i) == null || archivos.get(i) == ignorado) {
+                consecutivos++;
+                if (consecutivos == cantidad) {
+                    return tamanoIndice + i - cantidad + 1;
+                }
+            } else {
+                consecutivos = 0;
+            }
+        }
         return -1;
+    }
+
+    private void ocuparBloqueArchivo(ArchivoSimulado archivo) {
+        int inicio = archivo.getDireccionInicio() - tamanoIndice;
+        for (int i = 0; i < archivo.getEspacioOcupado(); i++) {
+            archivos.set(inicio + i, archivo);
+        }
+    }
+
+    private void liberarBloqueArchivo(ArchivoSimulado archivo) {
+        int inicio = archivo.getDireccionInicio() - tamanoIndice;
+        for (int i = 0; i < archivo.getEspacioOcupado(); i++) {
+            archivos.set(inicio + i, null);
+        }
+    }
+
+    public int getEspacioArchivosDisponible() {
+        int libres = 0;
+        for (ArchivoSimulado archivo : archivos) {
+            if (archivo == null) libres++;
+        }
+        return libres;
+    }
+
+    public int getEspacioArchivosOcupado() {
+        return tamanoArchivos - getEspacioArchivosDisponible();
+    }
+
+    public int getTamanoArchivos() {
+        return tamanoArchivos;
     }
 
     /**
@@ -267,21 +458,16 @@ public class Almacenamiento {
 
         validarDireccion(direccion);
 
-        if (almacenamiento[direccion] == null) {
-            return "";
+        if (direccion < tamanoIndice) {
+            EntradaIndice entrada = indiceArchivos.get(direccion);
+            return entrada == null ? "" : "INDICE " + entrada.getNombre() + " -> " + entrada.getDireccion();
         }
-
-        if (almacenamiento[direccion] instanceof EntradaIndice) {
-            EntradaIndice entrada = (EntradaIndice) almacenamiento[direccion];
-            return "INDICE " + entrada.getNombre() + " -> " + entrada.getDireccion();
+        if (direccion < inicioMemoriaVirtual) {
+            ArchivoSimulado archivo = archivos.get(direccion - tamanoIndice);
+            return archivo == null ? "" : (archivo.esPrograma() ? "PROGRAMA " : "ARCHIVO ") + archivo.getNombre();
         }
-
-        if (almacenamiento[direccion] instanceof ArchivoSimulado) {
-            ArchivoSimulado archivo = (ArchivoSimulado) almacenamiento[direccion];
-            return "ARCHIVO " + archivo.getNombre();
-        }
-
-        return almacenamiento[direccion].toString();
+        Instruccion instruccion = memoriaVirtual.get(direccion - inicioMemoriaVirtual);
+        return instruccion == null ? "" : instruccion.toString();
     }
 
     /**
@@ -296,6 +482,15 @@ public class Almacenamiento {
 
     public int getSize() {
         return size;
+    }
+
+    /** Siempre limpia memoria virtual; borrarArchivos controla el área de archivos. */
+    public void reiniciar(boolean borrarArchivos) {
+        Collections.fill(memoriaVirtual, null);
+        if (borrarArchivos) {
+            Collections.fill(indiceArchivos, null);
+            Collections.fill(archivos, null);
+        }
     }
 
     public int getTamanoIndice() {

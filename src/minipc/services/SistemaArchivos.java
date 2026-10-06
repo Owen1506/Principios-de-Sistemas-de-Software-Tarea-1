@@ -21,14 +21,19 @@ import minipc.model.CPU;
 public class SistemaArchivos {
 
     private Almacenamiento almacenamiento;
+    private GestorProcesos gestorProcesos;
 
-    public SistemaArchivos(Almacenamiento almacenamiento) {
+    public SistemaArchivos(Almacenamiento almacenamiento, GestorProcesos gestorProcesos) {
 
         if (almacenamiento == null) {
             throw new IllegalArgumentException("El almacenamiento no puede ser null.");
         }
+        if (gestorProcesos == null) {
+            throw new IllegalArgumentException("El gestor de procesos no puede ser null.");
+        }
 
         this.almacenamiento = almacenamiento;
+        this.gestorProcesos = gestorProcesos;
     }
 
     /**
@@ -136,8 +141,8 @@ public class SistemaArchivos {
             throw new IllegalStateException("El archivo no existe: " + nombreArchivo);
         }
 
-        proceso.cerrarArchivo(nombreArchivo);
         almacenamiento.eliminarArchivo(nombreArchivo);
+        gestorProcesos.cerrarArchivoEnTodosLosProcesos(nombreArchivo);
     }
 
     /**

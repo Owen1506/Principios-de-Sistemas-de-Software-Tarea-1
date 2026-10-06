@@ -186,6 +186,7 @@ public class GestorInterrupciones {
             throw new IllegalStateException("No existe un proceso en ejecución.");
         }
 
+        despachador.guardarContextoActual();
         gestorProcesos.finalizarProcesoActual();
         despachador.despacharSiguiente();
     }
@@ -208,6 +209,11 @@ public class GestorInterrupciones {
 
     public String getUltimaSalida() {
         return ultimaSalida;
+    }
+
+    public void reiniciar() {
+        esperandoTeclado.clear();
+        ultimaSalida = "";
     }
 
     public boolean hayProcesoEsperandoTeclado() {

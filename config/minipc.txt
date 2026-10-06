@@ -1,0 +1,16 @@
+# Posiciones simuladas de memoria y almacenamiento.
+ram=256
+almacenamiento=512
+memoriaVirtual=64
+# El índice reserva una entrada por archivo: nombre y dirección.
+# 10 entradas permiten registrar hasta 10 archivos almacenados.
+indice=10
+
+# División fija: 128 posiciones de kernel y 128 de usuario (50% y 50%).
+# inicioUsuario admite valores positivos hasta el 50% de RAM.
+inicioUsuario=128
+maxProcesosEnRam=5
+maxProcesos=20
+
+# La memoria virtual siempre se limpia al reiniciar.
+conservarArchivosAlReiniciar=true

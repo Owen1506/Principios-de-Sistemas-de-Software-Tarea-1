@@ -1,6 +1,8 @@
 package minipc.model;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 
 /**
  * Simula la memoria principal de la Mini PC.
@@ -15,10 +17,11 @@ import java.util.List;
  */
 public class Memoria {
 
-    private int size;
-    private int inicioUsuario;
+    private final int size;
+    private final int inicioUsuario;
 
-    private Object[] memoria;
+    private List<BCP> areaSistema;
+    private List<Instruccion> areaUsuario;
 
     /**
      * Crea una nueva memoria con un tamaño determinado y define
@@ -39,7 +42,11 @@ public class Memoria {
 
         this.size = size;
         this.inicioUsuario = inicioUsuario;
-        this.memoria = new Object[size];
+        reiniciar();
+    }
+
+    public boolean hayEspacioDisponible(int cantidad) {
+        return cantidad > 0 && buscarEspacioLibre(cantidad) != -1;
     }
 
     /**
@@ -54,6 +61,10 @@ public class Memoria {
             throw new IllegalArgumentException("El programa está vacío.");
         }
 
+        if (programa.contains(null)) {
+            throw new IllegalArgumentException("El programa contiene instrucciones null.");
+        }
+
         int inicioPrograma = buscarEspacioLibre(programa.size());
 
         if (inicioPrograma == -1) {
@@ -61,7 +72,7 @@ public class Memoria {
         }
 
         for (int i = 0; i < programa.size(); i++) {
-            memoria[inicioPrograma + i] = programa.get(i);
+            areaUsuario.set(inicioPrograma + i - inicioUsuario, programa.get(i));
         }
 
         return inicioPrograma;
@@ -77,7 +88,7 @@ public class Memoria {
 
         for (int i = inicioUsuario; i < size; i++) {
 
-            if (memoria[i] == null) {
+            if (areaUsuario.get(i - inicioUsuario) == null) {
 
                 if (consecutivos == 0) {
                     posibleInicio = i;
@@ -114,8 +125,8 @@ public class Memoria {
 
         for (int i = 0; i < inicioUsuario; i++) {
 
-            if (memoria[i] == null) {
-                memoria[i] = bcp;
+            if (areaSistema.get(i) == null) {
+                areaSistema.set(i, bcp);
                 bcp.setDireccionBCP(i);
                 return i;
             }
@@ -134,15 +145,7 @@ public class Memoria {
 
         validarDireccionSO(direccion);
 
-        if (memoria[direccion] == null) {
-            return null;
-        }
-
-        if (!(memoria[direccion] instanceof BCP)) {
-            throw new IllegalStateException("La posición no contiene un BCP.");
-        }
-
-        return (BCP) memoria[direccion];
+        return areaSistema.get(direccion);
     }
 
     /**
@@ -154,18 +157,16 @@ public class Memoria {
 
         validarDireccionSO(direccion);
 
-        if (memoria[direccion] instanceof BCP) {
-            BCP bcp = (BCP) memoria[direccion];
+        BCP bcp = areaSistema.get(direccion);
+        if (bcp != null) {
             bcp.setDireccionBCP(-1);
-            memoria[direccion] = null;
+            areaSistema.set(direccion, null);
         }
     }
 
     /**
      * Obtiene una instrucción almacenada en el área de usuario.
      *
-     * Se conserva el nombre leer() para no cambiar innecesariamente
-     * el resto del proyecto.
      *
      * @param direccion dirección de memoria
      * @return instrucción almacenada o null si la posición está libre
@@ -174,15 +175,7 @@ public class Memoria {
 
         validarDireccionUsuario(direccion);
 
-        if (memoria[direccion] == null) {
-            return null;
-        }
-
-        if (!(memoria[direccion] instanceof Instruccion)) {
-            throw new IllegalStateException("La posición no contiene una instrucción.");
-        }
-
-        return (Instruccion) memoria[direccion];
+        return areaUsuario.get(direccion - inicioUsuario);
     }
 
     /**
@@ -194,7 +187,7 @@ public class Memoria {
     public void escribir(int direccion, Instruccion instruccion) {
 
         validarDireccionUsuario(direccion);
-        memoria[direccion] = instruccion;
+        areaUsuario.set(direccion - inicioUsuario, instruccion);
     }
 
     /**
@@ -210,7 +203,7 @@ public class Memoria {
             int direccion = inicio + i;
 
             if (direccion >= inicioUsuario && direccion < size) {
-                memoria[direccion] = null;
+                areaUsuario.set(direccion - inicioUsuario, null);
             }
         }
     }
@@ -218,35 +211,25 @@ public class Memoria {
     /**
      * Obtiene una representación simple del contenido de una posición.
      *
-     * Este método puede utilizarse posteriormente para mostrar
-     * la memoria en la interfaz gráfica.
      */
     public String obtenerContenido(int direccion) {
 
         validarDireccion(direccion);
 
-        if (memoria[direccion] == null) {
-            return "";
+        if (direccion < inicioUsuario) {
+            BCP bcp = areaSistema.get(direccion);
+            return bcp == null ? "" : "BCP PID " + bcp.getPid();
         }
-
-        if (memoria[direccion] instanceof BCP) {
-            BCP bcp = (BCP) memoria[direccion];
-            return "BCP PID " + bcp.getPid();
-        }
-
-        if (memoria[direccion] instanceof Instruccion) {
-            Instruccion instruccion = (Instruccion) memoria[direccion];
-            return instruccion.getOperacion();
-        }
-
-        return memoria[direccion].toString();
+        Instruccion instruccion = areaUsuario.get(direccion - inicioUsuario);
+        return instruccion == null ? "" : instruccion.getOperacion();
     }
 
     /**
      * Reinicia completamente la memoria principal.
      */
     public void reiniciar() {
-        memoria = new Object[size];
+        areaSistema = new ArrayList<>(Collections.<BCP>nCopies(inicioUsuario, null));
+        areaUsuario = new ArrayList<>(Collections.<Instruccion>nCopies(size - inicioUsuario, null));
     }
 
     /**

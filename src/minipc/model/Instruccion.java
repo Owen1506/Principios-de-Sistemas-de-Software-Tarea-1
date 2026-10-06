@@ -13,7 +13,7 @@ import java.util.List;
  * Cada instrucción almacena la operación a ejecutar, el registro
  * asociado, un segundo registro cuando corresponde, un servicio
  * para instrucciones INT, un valor inmediato y sus parámetros,
- * además de su representación binaria.
+ * además de la línea ASM original y su peso de ejecución.
  *
  * Ejemplos de instrucciones:
  *
@@ -32,7 +32,7 @@ public class Instruccion {
     private String servicio; // Para operaciones como INT 20H
     private Integer valor; // Para movimientos inmediatos y desplazamientos
     private List<Integer> parametros; // Para operaciones como PARAM
-    private String binario;
+    private String textoOriginal;
     private String texto;
     private int peso;
 
@@ -46,18 +46,20 @@ public class Instruccion {
      * @param servicio servicio asociado a una instrucción INT
      * @param valor valor inmediato o desplazamiento; puede ser null si no aplica
      * @param parametros lista de parámetros numéricos; puede ser null si no aplica
-     * @param binario representación binaria completa de la instrucción
+     * @param textoOriginal línea ASM original de la instrucción
+     * @param texto contenido de un operando de texto o null si no aplica
+     * @param peso cantidad de ticks necesarios para ejecutar la instrucción
      */
-    public Instruccion(String operacion,String registro,String registro2,String servicio,Integer valor,List<Integer> parametros,String binario,String texto, int peso) {
+    public Instruccion(String operacion,String registro,String registro2,String servicio,Integer valor,List<Integer> parametros,String textoOriginal,String texto, int peso) {
         this.operacion = operacion;
         this.registro = registro;
         this.registro2 = registro2;
         this.servicio = servicio;
         this.valor = valor;
         this.parametros = parametros;
-        this.binario = binario;
-        this.texto = "";
-        this.peso = 0;
+        this.textoOriginal = textoOriginal;
+        this.texto = texto;
+        this.peso = peso;
     }
 
     /**
@@ -115,12 +117,12 @@ public class Instruccion {
     }
 
     /**
-     * Obtiene la representación binaria completa de la instrucción.
+     * Obtiene la línea ASM original de la instrucción.
      *
-     * @return código binario de la instrucción
+     * @return línea ASM original
      */
-    public String getBinario() {
-        return binario;
+    public String getTextoOriginal() {
+        return textoOriginal;
     }
 
     public String getTexto() {
@@ -132,23 +134,10 @@ public class Instruccion {
     }
 
     /**
-     * Genera una representación textual de la instrucción
-     * mostrando todos sus atributos.
-     *
-     * @return representación textual de la instrucción
+     * Muestra la instrucción tal como aparece en el programa ASM.
      */
     @Override
     public String toString() {
-        return "Instruccion{" +
-                "operacion='" + operacion + '\'' +
-                ", registro='" + registro + '\'' +
-                ", registro2='" + registro2 + '\'' +
-                ", servicio='" + servicio + '\'' +
-                ", valor=" + valor +
-                ", texto='" + texto + '\'' +
-                ", peso=" + peso +
-                ", parametros=" + parametros +
-                ", binario='" + binario + '\'' +
-                '}';
+        return textoOriginal;
     }
 }

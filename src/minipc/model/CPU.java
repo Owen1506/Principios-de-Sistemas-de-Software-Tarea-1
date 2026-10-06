@@ -8,7 +8,7 @@ package minipc.model;
  * - PC (Program Counter): indica la dirección de la siguiente
  *   instrucción que debe ejecutarse.
  *
- * - IR (Instruction Register): almacena la representación binaria
+ * - IR (Instruction Register): almacena la línea ASM original
  *   de la instrucción que está siendo procesada.
  *
  * - AC (Accumulator): registro acumulador utilizado por operaciones
@@ -60,7 +60,7 @@ public class CPU {
     /**
      * Obtiene el contenido actual del Instruction Register.
      *
-     * @return instrucción binaria almacenada actualmente en el IR
+     * @return instrucción ASM almacenada actualmente en el IR
      */
     public String getIR() {
         return ir;
@@ -69,7 +69,7 @@ public class CPU {
     /**
      * Modifica el contenido del Instruction Register.
      *
-     * @param ir representación binaria de la instrucción actual
+     * @param ir línea ASM original de la instrucción actual
      */
     public void setIR(String ir) {
         this.ir = ir;

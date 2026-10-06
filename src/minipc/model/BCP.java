@@ -1,6 +1,7 @@
 package minipc.model;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -66,20 +67,46 @@ public class BCP {
 
     private boolean zeroFlag;
 
-
     /**
      * Crea un nuevo Bloque de Control de Proceso.
      *
+     * Si inicioPrograma es -1, el proceso todavía no posee una
+     * ubicación en memoria principal. Esto permite crear procesos
+     * que inicialmente deban permanecer en memoria virtual.
+     *
      * @param pid identificador único del proceso
-     * @param inicioPrograma dirección inicial del programa en memoria
+     * @param inicioPrograma dirección inicial del programa en memoria,
+     *                       o -1 si aún no está cargado en RAM
      * @param tamanoPrograma cantidad de posiciones de memoria ocupadas
      */
     public BCP(int pid, int inicioPrograma, int tamanoPrograma) {
 
+        if (pid <= 0) {
+            throw new IllegalArgumentException("El PID debe ser mayor que cero.");
+        }
+
+        if (inicioPrograma < -1) {
+            throw new IllegalArgumentException("La dirección inicial del programa no es válida.");
+        }
+
+        if (tamanoPrograma <= 0) {
+            throw new IllegalArgumentException("El tamaño del programa debe ser mayor que cero.");
+        }
+
         this.pid = pid;
         this.estado = EstadoProceso.NUEVO;
 
-        this.pc = inicioPrograma;
+        this.inicioPrograma = inicioPrograma;
+        this.tamanoPrograma = tamanoPrograma;
+
+        if (inicioPrograma == -1) {
+            this.pc = -1;
+            this.finPrograma = -1;
+        } else {
+            this.pc = inicioPrograma;
+            this.finPrograma = inicioPrograma + tamanoPrograma - 1;
+        }
+
         this.ir = "";
         this.ac = 0;
 
@@ -89,10 +116,6 @@ public class BCP {
         this.dx = "0";
         this.ah = "";
         this.al = "";
-
-        this.inicioPrograma = inicioPrograma;
-        this.tamanoPrograma = tamanoPrograma;
-        this.finPrograma = inicioPrograma + tamanoPrograma - 1;
 
         this.prioridad = 0;
         this.pila = new PilaProceso();
@@ -109,17 +132,12 @@ public class BCP {
         this.zeroFlag = false;
     }
 
-    /**
-     * Guarda dentro del BCP una copia del contexto actual de la CPU.
-     *
-     * @param cpu CPU cuyo contexto será almacenado
-     */
     public void guardarContexto(CPU cpu) {
-
         this.pc = cpu.getPC();
         this.ir = cpu.getIR();
         this.ac = cpu.getAC();
         this.zeroFlag = cpu.isZeroFlag();
+
         this.ax = cpu.getRegistros().getAX();
         this.bx = cpu.getRegistros().getBX();
         this.cx = cpu.getRegistros().getCX();
@@ -127,20 +145,14 @@ public class BCP {
         this.dx = cpu.getRegistros().getDX();
         this.ah = cpu.getRegistros().getAH();
         this.al = cpu.getRegistros().getAL();
-
     }
 
-    /**
-     * Restaura en una CPU el contexto almacenado dentro del BCP.
-     *
-     * @param cpu CPU donde será restaurado el contexto
-     */
     public void restaurarContexto(CPU cpu) {
-
         cpu.setPC(this.pc);
         cpu.setIR(this.ir);
         cpu.setAC(this.ac);
         cpu.setZeroFlag(this.zeroFlag);
+
         cpu.getRegistros().setAX(this.ax);
         cpu.getRegistros().setBX(this.bx);
         cpu.getRegistros().setCX(this.cx);
@@ -193,7 +205,7 @@ public class BCP {
     public void setDX(String dx) {
         this.dx = dx;
     }
-    
+
     public String getAH() {
         return ah;
     }
@@ -201,9 +213,33 @@ public class BCP {
     public String getAL() {
         return al;
     }
-    
+
     public boolean isZeroFlag() {
         return zeroFlag;
+    }
+
+    /**
+     * Reubica el programa en memoria principal conservando el avance
+     * que ya llevaba el PC.
+     *
+     * Si el proceso todavía no había sido cargado en RAM
+     * (inicioPrograma = -1), comenzará desde la primera instrucción.
+     */
+    public void reubicarPrograma(int nuevoInicio) {
+
+        if (nuevoInicio < 0) {
+            throw new IllegalArgumentException("La nueva dirección inicial no es válida.");
+        }
+
+        int desplazamientoPC = 0;
+
+        if (inicioPrograma >= 0 && pc >= inicioPrograma) {
+            desplazamientoPC = pc - inicioPrograma;
+        }
+
+        this.inicioPrograma = nuevoInicio;
+        this.finPrograma = nuevoInicio + tamanoPrograma - 1;
+        this.pc = nuevoInicio + desplazamientoPC;
     }
 
     public int getInicioPrograma() {
@@ -266,12 +302,14 @@ public class BCP {
         return tiempoCPU;
     }
 
-    /**
-     * Incrementa un segundo simulado de uso de CPU.
-     *
-     * Se deberá llamar cuando el proceso esté en ejecución
-     * y se produzca un tick/clic del botón Siguiente.
-     */
+    /** Tiempo real desde la primera asignación de CPU hasta la finalización. */
+    public Duration getTiempoTotal() {
+        if (horaInicio == null || horaFinal == null) {
+            return Duration.ZERO;
+        }
+        return Duration.between(horaInicio, horaFinal);
+    }
+
     public void incrementarTiempoCPU() {
         tiempoCPU++;
     }
@@ -281,7 +319,6 @@ public class BCP {
     }
 
     public void agregarArchivoAbierto(String nombreArchivo) {
-
         if (!archivosAbiertos.contains(nombreArchivo)) {
             archivosAbiertos.add(nombreArchivo);
         }
@@ -293,7 +330,6 @@ public class BCP {
 
     @Override
     public String toString() {
-
         return "PID=" + pid
                 + "\nEstado=" + estado
                 + "\nPC=" + pc
