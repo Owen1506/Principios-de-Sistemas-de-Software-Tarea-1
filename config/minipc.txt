@@ -1,0 +1,22 @@
+# Posiciones simuladas de memoria y almacenamiento.
+# Algoritmo de planificación. Actualmente solo está implementado FCFS.
+algoritmo=FCFS
+
+ram=256
+almacenamiento=512
+memoriaVirtual=64
+# El índice reserva una entrada por archivo: nombre y dirección.
+# 10 entradas permiten registrar hasta 10 archivos almacenados.
+indice=10
+
+inicioUsuario = 128
+maxProcesosEnRam=5
+
+# Límite de procesos activos incluyendo los que esperan en virtual.
+# No cambia el límite simultáneo de cinco procesos en RAM.
+# Cada BCP ocupa 24 posiciones (incluye motivo de error): caben 5 en kernel de 128.
+# Este límite configurado también está sujeto al espacio disponible en kernel.
+maxProcesos=20
+
+# La memoria virtual siempre se limpia al reiniciar.
+conservarArchivosAlReiniciar=true

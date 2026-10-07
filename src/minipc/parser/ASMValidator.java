@@ -31,14 +31,14 @@ public class ASMValidator {
     /**
      * Registros generales permitidos por la Mini PC.
      */
-    private static final List<String> REGISTROS =
-            List.of("AX", "BX", "CX", "DX");
+    private static final List<String> REGISTROS = List.of("AX", "BX", "CX", "DX","AH","AL");
 
+    private static final List<String> SERVICIOS = List.of("21H", "10H", "09H", "20H");
+    private static final List<String> VALORESAH = List.of("3CH","3DH","4DH","40H","41H");
     /**
      * Operaciones admitidas por el lenguaje ASM simplificado.
      */
-    private static final List<String> OPERACIONES =
-            List.of("MOV", "LOAD", "STORE", "ADD", "SUB");
+    private static final List<String> OPERACIONES = List.of("MOV", "LOAD", "STORE", "ADD", "SUB", "INT", "SWAP", "PUSH", "POP", "JMP", "JE", "JNE", "CMP", "DEC" ,"INC" , "PARAM");
 
 
     /**
@@ -114,11 +114,9 @@ public class ASMValidator {
          * partes[0] = "MOV"
          * partes[1] = "AX, 5"
          */
-        String[] partes =
-                linea.split("\\s+", 2);
+        String[] partes = linea.split("\\s+", 2);
 
-        String operacion =
-                partes[0].toUpperCase();
+        String operacion = partes[0].toUpperCase();
 
 
         /*
@@ -135,16 +133,23 @@ public class ASMValidator {
         /*
          * Toda operación válida requiere al menos un operando.
          */
-        if (partes.length < 2) {
+        if ( (operacion.equals("INC") || operacion.equals("DEC")) && partes.length == 1){
+        }
+        else if (partes.length < 2) {
 
             return "La instrucción está incompleta.";
         }
 
-
-        String operandos =
-                partes[1].trim();
-
-
+        String operandos = "";
+        if (partes.length == 1){
+                operandos = null;
+        }
+        
+        else if (!partes[1].equals(null)){
+                operandos = partes[1].trim();
+        }
+                
+        
         /*
          * La validación específica depende del tipo de operación.
          */
@@ -152,17 +157,23 @@ public class ASMValidator {
 
             case "MOV":
                 return validarMOV(operandos);
+            case "INT": //
+            case "DEC": //
+            case "INC": //
+            case "PUSH"://
+            case "POP": //
+            case "JMP": //
+            case "JE"://
+            case "JNE": //
+            case "PARAM": //
 
+            case "SWAP": //
+            case "CMP": //
             case "LOAD":
             case "STORE":
             case "ADD":
             case "SUB":
-
-                return validarOperacionRegistro(
-                        operacion,
-                        operandos
-                );
-
+                return validarOperacionRegistro(operacion,operandos);
             default:
                 return "Operación no reconocida.";
         }
@@ -188,58 +199,52 @@ public class ASMValidator {
          * MOV posee dos operandos separados por una coma:
          *
          * registro, valor
+         * registro, registro
          */
-        String[] partes =
-                operandos.split(",");
-
+        String[] partes = operandos.split(",", 2);
 
         if (partes.length != 2) {
-
-            return "MOV debe tener el formato: "
-                    + "MOV REGISTRO, VALOR";
+            return "MOV debe tener el formato: " + "MOV REGISTRO, VALOR o MOV REGISTRO, REGISTRO";
         }
 
+        String registro = partes[0].trim().toUpperCase();
 
-        String registro =
-                partes[0]
-                        .trim()
-                        .toUpperCase();
-
-        String valorTexto =
-                partes[1].trim();
+        String valorTexto = partes[1].trim();
 
 
         // Verificar que el registro exista.
         if (!REGISTROS.contains(registro)) {
 
-            return "Registro no válido: "
-                    + registro;
+            return "Registro no válido: " + registro;
         }
 
+        if (registro.equals("DX") || registro.equals("AH") || registro.equals("AL")){
 
-        try {
-
-            int valor =
-                    Integer.parseInt(valorTexto);
-
-            /*
-             * El formato entero utilizado por la Mini PC posee:
-             *
-             * 1 bit para el signo.
-             * 7 bits para la magnitud.
-             *
-             * Por esta razón se permite un rango de -127 a 127.
-             */
-            if (valor < -127 || valor > 127) {
-
-                return "El valor debe estar entre -127 y 127.";
-            }
-
-        } catch (NumberFormatException e) {
-
-            return "El valor de MOV debe ser un número entero.";
         }
 
+        else if (!REGISTROS.contains(valorTexto)){
+                try {
+
+                int valor = Integer.parseInt(valorTexto);
+
+                /*
+                * El formato entero utilizado por la Mini PC posee:
+                *
+                * 1 bit para el signo.
+                * 7 bits para la magnitud.
+                *
+                * Por esta razón se permite un rango de -127 a 127.
+                */
+                if (valor < -127 || valor > 127) {
+
+                        return "El valor debe estar entre -127 y 127.";
+                }
+
+                } catch (NumberFormatException e) {
+
+                return "El valor de MOV debe ser un número entero o un registro valido.";
+                }
+        }
 
         // null indica que no se encontró ningún error.
         return null;
@@ -256,25 +261,81 @@ public class ASMValidator {
      * @param operando registro recibido por la instrucción
      * @return descripción del error encontrado, o null si es válido
      */
-    private String validarOperacionRegistro(
-            String operacion,
-            String operando
-    ) {
+    private String validarOperacionRegistro(String operacion,String operando) {
+        if (operando != null){
+                String registro = operando.trim().toUpperCase();
+                String registro2[] = operando.split(",");
+                if (operando.toUpperCase().equals("AH") || operando.toUpperCase().equals("AL")){
+                        if (!operacion.equals("MOV")){
+                                return operacion + " AH y AL solo pueden ser modificados por MOV";
+                        }
+                }
+                
+                else if (operacion.equals("SWAP")){
+                        if (registro2.length != 2){
+                                return operacion + " No hay registros o no estan separados por una coma. Ej SWAP AX, BX";
+                        }
+                        else {
+                                if (registro2[0].trim().equals(registro2[1].trim().toUpperCase())){
+                                        return operacion + " Los registros son los mismos";
+                                }
+                                else if (!REGISTROS.contains(registro2[0].trim().toUpperCase()) || !REGISTROS.contains(registro2[1].trim().toUpperCase())) {
+                                        return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
+                                }
+                        }
+                }
+                else if (operacion.equals("CMP")){
+                        if (registro2.length != 2){
+                                return operacion + " No hay registros o no estan separados por una coma. Ej SWAP AX, BX";
+                        }
+                        else if (!REGISTROS.contains(registro2[0].trim().toUpperCase()) || !REGISTROS.contains(registro2[1].trim().toUpperCase())) {
+                                return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
+                        }
+                        
+                }
+                else if (operacion.equals("INT")){
+                        if (!SERVICIOS.contains(operando.trim().toUpperCase())){
+                           return operacion + " debe recibir una llamada de sistema válido: " + "21H, 09H, 20H o 10H.";     
+                        }
+                } 
+                else if (operacion.equals("JMP") || operacion.equals("JE") || operacion.equals("JNE")){
+                        try {
+                                int desplazamiento = Integer.parseInt(operando);
+                                return null;
 
-        String registro =
-                operando
-                        .trim()
-                        .toUpperCase();
+                        } catch (NumberFormatException e) {
+                                return operacion + " debe recibir un desplazamiento numérico.";
+                        }  
+                }
+                else if (operacion.equals("PARAM")){
+                        if (registro2.length > 3){
+                                return operacion + " Cantidad de parametros no debe ser mayor a 3";
+                        }
+                        if (registro2.length < 1){
+                                return operacion + " Cantidad de parametros no puede ser menor a 1";
+                        }
+                        for (int i = 0; i < registro2.length; i++) {
 
+                                String num = registro2[i].trim();
 
-        if (!REGISTROS.contains(registro)) {
+                                try {
 
-            return operacion
-                    + " debe recibir un registro válido: "
-                    + "AX, BX, CX o DX.";
+                                Integer.parseInt(num);
+
+                                } catch (NumberFormatException e) {
+
+                                return operacion + " debe recibir como parametro un valor numerico.";
+                                }
+                        }
+                       
+
+                }
+                else if (!REGISTROS.contains(registro)) {
+                
+                        return operacion + " debe recibir un registro válido: " + "AX, BX, CX o DX.";
+                        
+                }
         }
-
-
         return null;
     }
 }

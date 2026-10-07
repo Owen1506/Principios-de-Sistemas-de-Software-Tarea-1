@@ -1,0 +1,3 @@
+MOV AX, "texto"
+SWAP AX, BX, CX
+INT 99H

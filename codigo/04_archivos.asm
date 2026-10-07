@@ -1,0 +1,16 @@
+MOV DX, "prueba.txt"
+MOV AH, "3CH"
+INT 21H
+MOV AH, "3DH"
+INT 21H
+MOV AL, "Hola desde archivo"
+MOV AH, "40H"
+INT 21H
+MOV AH, "4DH"
+INT 21H
+MOV DX, AL
+INT 10H
+MOV DX, "prueba.txt"
+MOV AH, "41H"
+INT 21H
+INT 20H

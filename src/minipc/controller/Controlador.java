@@ -1,420 +1,469 @@
 package minipc.controller;
 
+import minipc.model.Almacenamiento;
 import minipc.model.BCP;
 import minipc.model.CPU;
+import minipc.model.EstadoProceso;
 import minipc.model.Instruccion;
 import minipc.model.Memoria;
+import minipc.config.Configuracion;
+import minipc.config.ConfigLoader;
+import java.io.IOException;
+import java.nio.file.Path;
+
+import minipc.services.Despachador;
 import minipc.services.Executor;
+import minipc.services.FCFS;
+import minipc.services.GestorInterrupciones;
+import minipc.services.GestorProcesos;
+import minipc.services.GestorMemoriaVirtual;
+import minipc.services.SistemaArchivos;
 
 import java.util.List;
+import java.util.ArrayList;
+import minipc.parser.ASMReader;
+import minipc.parser.ASMValidator;
+import minipc.parser.ASMParser;
 
 /**
- * Controla y coordina los principales componentes de la Mini PC.
+ * Coordina los principales componentes de la Mini PC.
  *
- * Esta clase actúa como intermediario entre la interfaz gráfica
- * y la lógica interna del simulador.
- *
- * Se encarga de:
- *
- * - Administrar la CPU.
- * - Administrar la memoria.
- * - Cargar programas en memoria.
- * - Ejecutar instrucciones paso a paso o de forma completa.
- * - Mantener actualizado el BCP.
- * - Determinar cuándo un programa ha finalizado.
- *
- * La interfaz gráfica no ejecuta instrucciones directamente,
- * sino que delega estas acciones al controlador.
+ * Integra la admisión, planificación, memoria e interrupciones del backend.
  */
 public class Controlador {
 
     private CPU cpu;
     private Memoria memoria;
+    private Almacenamiento almacenamiento;
+
+    private GestorProcesos gestorProcesos;
+    private GestorMemoriaVirtual gestorMemoriaVirtual;
+    private FCFS fcfs;
+    private Despachador despachador;
+    private SistemaArchivos sistemaArchivos;
+    private GestorInterrupciones gestorInterrupciones;
     private Executor executor;
-    private BCP bcp;
 
-    private List<Instruccion> programa;
+    // Control de la instrucción que está consumiendo ticks de CPU.
+    private Instruccion instruccionActual;
+    private int ticksRestantes;
+    private Configuracion configuracion;
+    private final List<String> erroresEjecucion = new ArrayList<>();
 
-    private int inicioPrograma;
-
-
-    /**
-     * Crea un nuevo controlador y configura los principales
-     * componentes de la Mini PC.
-     *
-     * @param tamanoMemoria tamaño total de la memoria
-     * @param inicioUsuario primera dirección disponible para programas de usuario
-     */
-    public Controlador(
-            int tamanoMemoria,
-            int inicioUsuario
-    ) {
+    public Controlador(int tamañoMemoria, int inicioUsuario, int tamañoAlmacenamiento, int tamañoIndice, int tamañoMemoriaVirtual) {
 
         this.cpu = new CPU();
-
-        this.memoria =
-                new Memoria(
-                        tamanoMemoria,
-                        inicioUsuario
-                );
-
-        this.executor =
-                new Executor(cpu);
-
-        this.programa = null;
-
-        this.inicioPrograma = -1;
-
-        this.bcp = null;
+        this.memoria = new Memoria(tamañoMemoria, inicioUsuario);
+        this.almacenamiento = new Almacenamiento(tamañoAlmacenamiento, tamañoIndice, tamañoMemoriaVirtual);
+        inicializarServicios(null);
     }
 
+    public Controlador(Configuracion configuracion) {
+        this(configuracion.getTamañoMemoria(), configuracion.getInicioUsuario(),
+                configuracion.getTamañoAlmacenamiento(), configuracion.getTamañoIndice(),
+                configuracion.getTamañoMemoriaVirtual());
+        this.configuracion = configuracion;
+        inicializarServicios(configuracion);
+    }
+
+    public Controlador(Path archivoConfiguracion) throws IOException {
+        this(new ConfigLoader().cargar(archivoConfiguracion));
+    }
+
+    private void inicializarServicios(Configuracion configuracion) {
+        this.gestorProcesos = configuracion == null ? new GestorProcesos(memoria)
+                : new GestorProcesos(memoria, configuracion);
+        this.gestorMemoriaVirtual = new GestorMemoriaVirtual(memoria, almacenamiento, gestorProcesos);
+        String algoritmo = configuracion == null ? "FCFS" : configuracion.getAlgoritmo();
+        this.fcfs = switch (algoritmo) {
+            case "FCFS" -> new FCFS(gestorProcesos);
+            default -> throw new IllegalArgumentException("Algoritmo no implementado: " + algoritmo);
+        };
+        this.despachador = new Despachador(cpu, gestorProcesos, fcfs);
+        this.sistemaArchivos = new SistemaArchivos(almacenamiento, gestorProcesos);
+        this.gestorInterrupciones = new GestorInterrupciones(cpu, gestorProcesos, despachador, sistemaArchivos);
+        this.executor = new Executor(cpu, gestorProcesos, gestorInterrupciones);
+
+        this.instruccionActual = null;
+        this.ticksRestantes = 0;
+    }
 
     /**
-     * Carga un programa en la memoria de la Mini PC y prepara
-     * la CPU y el BCP para iniciar su ejecución.
+     * Carga un programa en memoria principal y crea su proceso.
      *
-     * Al cargar un nuevo programa:
-     *
-     * - Se reinicia la CPU.
-     * - Se reinicia la memoria.
-     * - Se almacena el programa en memoria.
-     * - El PC se posiciona en la primera instrucción.
-     * - Se crea el BCP asociado al proceso.
-     *
-     * @param programa lista de instrucciones que se desea ejecutar
-     * @throws IllegalArgumentException si el programa es nulo o está vacío
+     * El programa se agrega sin eliminar los procesos que ya se
+     * encuentran cargados.
      */
-    public void cargarPrograma(
-            List<Instruccion> programa
-    ) {
+    public BCP cargarPrograma(List<Instruccion> programa) {
+        return cargarPrograma(programa, 0);
+    }
 
-        if (
-                programa == null
-                || programa.isEmpty()
-        ) {
+    /**
+     * Carga un programa con una prioridad determinada.
+     */
+    public BCP cargarPrograma(List<Instruccion> programa, int prioridad) {
+        int numero = 1;
+        while (almacenamiento.existeArchivo("programa_" + numero + ".asm")) {
+            numero++;
+        }
+        return cargarPrograma("programa_" + numero + ".asm", programa, prioridad);
+    }
 
-            throw new IllegalArgumentException(
-                    "No se puede cargar un programa vacío."
-            );
+    /** Importa, valida y guarda el archivo real antes de admitir su proceso. */
+    public BCP cargarPrograma(Path archivo) throws IOException {
+        List<String> lineas = new ASMReader().leerArchivo(archivo);
+        List<String> errores = new ASMValidator().validarPrograma(lineas);
+        if (!errores.isEmpty()) {
+            throw new IllegalArgumentException(archivo.getFileName() + ":\n" + String.join("\n", errores));
+        }
+        return cargarPrograma(archivo.getFileName().toString(), new ASMParser().parsear(lineas), 0);
+    }
+
+    public BCP cargarPrograma(String nombre, List<Instruccion> programa) {
+        return cargarPrograma(nombre, programa, 0);
+    }
+
+    /** Una admisión fallida deshace también la nueva copia en disco. */
+    public BCP cargarPrograma(String nombre, List<Instruccion> programa, int prioridad) {
+        almacenamiento.guardarPrograma(nombre, programa);
+        try {
+            return cargarProgramaDesdeDisco(nombre, prioridad);
+        } catch (RuntimeException e) {
+            almacenamiento.eliminarArchivo(nombre);
+            throw e;
+        }
+    }
+
+    public BCP cargarProgramaDesdeDisco(String nombre) {
+        return cargarProgramaDesdeDisco(nombre, 0);
+    }
+
+    /** Permite volver a ejecutar un programa sin duplicar su copia en disco. */
+    public BCP cargarProgramaDesdeDisco(String nombre, int prioridad) {
+        return admitirPrograma(almacenamiento.leerPrograma(nombre), prioridad);
+    }
+
+    private BCP admitirPrograma(List<Instruccion> programa, int prioridad) {
+
+        if (programa == null || programa.isEmpty()) {
+            throw new IllegalArgumentException("No se puede cargar un programa vacío.");
+        }
+        if (programa.size() > memoria.getSize() - memoria.getInicioUsuario()) {
+            throw new IllegalArgumentException("El programa supera toda el área de usuario de RAM.");
         }
 
-        /*
-         * Se elimina cualquier estado perteneciente
-         * a una ejecución anterior.
-         */
-        cpu.reiniciarCPU();
-        memoria.reiniciar();
+        if (!gestorProcesos.hayEspacioParaPrograma(programa.size())) {
+            if (!almacenamiento.hayEspacioVirtualDisponible(programa.size())) {
+                throw new IllegalStateException("No existe espacio suficiente ni en RAM ni en memoria virtual.");
+            }
 
+            BCP bcp = gestorProcesos.crearProcesoSuspendido(programa.size(), prioridad);
+            try {
+                gestorMemoriaVirtual.guardarProcesoNuevo(bcp, programa);
+            } catch (RuntimeException e) {
+                gestorProcesos.descartarProcesoNuevo(bcp);
+                throw e;
+            }
+            return bcp;
+        }
 
-        // Se almacena la referencia al nuevo programa.
-        this.programa = programa;
+        int inicioPrograma = -1;
+        BCP bcp = null;
+        try {
+            inicioPrograma = memoria.cargarPrograma(programa);
+            bcp = gestorProcesos.crearProceso(inicioPrograma, programa.size(), prioridad);
+            gestorProcesos.prepararProceso(bcp);
+            return bcp;
 
-
-        /*
-         * El programa es cargado en la memoria de usuario.
-         * El método retorna la dirección donde inicia.
-         */
-        this.inicioPrograma =
-                memoria.cargarPrograma(programa);
-
-
-        /*
-         * El Program Counter debe apuntar inicialmente
-         * a la primera instrucción del programa.
-         */
-        cpu.setPC(inicioPrograma);
-
-
-        /*
-         * Se crea el BCP asociado al proceso.
-         *
-         * Actualmente se utiliza PID = 1 debido a que
-         * esta versión trabaja con un único proceso.
-         */
-        this.bcp =
-                new BCP(
-                        1,
-                        inicioPrograma,
-                        programa.size()
-                );
-
-
-        /*
-         * El programa ya está preparado para ejecutarse,
-         * por lo tanto pasa al estado LISTO.
-         */
-        bcp.setEstado("LISTO");
-
-
-        /*
-         * Se guarda en el BCP el contexto inicial
-         * de la CPU.
-         */
-        bcp.guardarContexto(cpu);
+        } catch (RuntimeException e) {
+            if (inicioPrograma != -1) {
+                memoria.liberarPrograma(inicioPrograma, programa.size());
+            }
+            if (bcp != null && bcp.getEstado() == EstadoProceso.NUEVO) {
+                gestorProcesos.descartarProcesoNuevo(bcp);
+            }
+            throw e;
+        }
     }
 
-
     /**
-     * Ejecuta una única instrucción del programa cargado.
+     * Ejecuta un segundo/tick simulado.
      *
-     * El ciclo realizado es:
-     *
-     * 1. FETCH: obtener la instrucción indicada por el PC.
-     * 2. Cargar la instrucción en el IR.
-     * 3. EXECUTE: ejecutar la operación correspondiente.
-     * 4. Incrementar el PC.
-     * 5. Guardar el nuevo contexto dentro del BCP.
-     *
-     * @throws IllegalStateException si no existe un programa cargado
-     *         o si el PC apunta a una posición sin instrucción
+     * Cada llamada representa un clic del botón Siguiente.
      */
     public void ejecutarSiguiente() {
 
-        if (programa == null) {
-
-            throw new IllegalStateException(
-                    "No hay ningún programa cargado."
-            );
-        }
-
-
         /*
-         * Si el PC ya se encuentra fuera del rango
-         * del programa, la ejecución ha terminado.
+         * Si la CPU está libre se intenta despachar un proceso.
          */
-        if (programaFinalizado()) {
+        if (gestorProcesos.getProcesoActual() == null) {
 
-            if (bcp != null) {
-                bcp.setEstado("FINALIZADO");
+            intentarReactivarSuspendidos();
+
+            if (!fcfs.hayProcesosPreparados()) {
+                return;
             }
 
+            despachador.despacharSiguiente();
+            reiniciarControlInstruccion();
+        }
+
+        BCP proceso = gestorProcesos.getProcesoActual();
+
+        if (proceso == null) {
             return;
         }
 
-
         /*
-         * Mientras se procesa una instrucción,
-         * el proceso se considera en ejecución.
+         * Si el PC ya superó el programa, el proceso termina.
          */
-        if (bcp != null) {
-            bcp.setEstado("EJECUTANDO");
+        if (cpu.getPC() > proceso.getFinPrograma()) {
+            despachador.guardarContextoActual();
+            gestorProcesos.finalizarProcesoActual();
+            reiniciarControlInstruccion();
+            intentarReactivarSuspendidos();
+            despachador.despacharSiguiente();
+            return;
         }
 
+        if (cpu.getPC() < proceso.getInicioPrograma()) {
+            finalizarPorError(proceso, new IllegalStateException("El PC se encuentra fuera del rango del proceso."));
+            return;
+        }
 
         /*
-         * FETCH:
+         * FETCH.
          *
-         * El PC contiene la dirección de la instrucción
-         * que debe obtenerse desde memoria.
+         * Solo se obtiene una nueva instrucción cuando no existe
+         * otra consumiendo ticks.
          */
-        Instruccion instruccionActual =
-                memoria.leer(
-                        cpu.getPC()
-                );
-
-
         if (instruccionActual == null) {
 
-            throw new IllegalStateException(
-                    "No existe una instrucción en la dirección "
-                    + cpu.getPC()
-            );
-        }
+            instruccionActual = memoria.leer(cpu.getPC());
 
-
-        /*
-         * La representación binaria de la instrucción
-         * se carga en el Instruction Register.
-         */
-        cpu.setIR(
-                instruccionActual.getBinario()
-        );
-
-
-        /*
-         * EXECUTE:
-         *
-         * El Executor interpreta la operación y modifica
-         * el estado de la CPU según corresponda.
-         */
-        executor.ejecutar(
-                instruccionActual
-        );
-
-
-        /*
-         * Se avanza a la siguiente posición de memoria.
-         */
-        cpu.incrementarPC();
-
-
-        /*
-         * Después de ejecutar la instrucción, el BCP
-         * guarda el nuevo contexto de la CPU.
-         */
-        if (bcp != null) {
-            bcp.guardarContexto(cpu);
-        }
-
-
-        /*
-         * Si después de incrementar el PC ya no quedan
-         * instrucciones, el proceso pasa a FINALIZADO.
-         */
-        if (programaFinalizado()) {
-
-            if (bcp != null) {
-                bcp.setEstado("FINALIZADO");
+            if (instruccionActual == null) {
+                finalizarPorError(proceso, new IllegalStateException("No existe una instrucción en la dirección " + cpu.getPC()));
+                return;
             }
+
+            cpu.setIR(instruccionActual.getTextoOriginal());
+            ticksRestantes = instruccionActual.getPeso();
+        }
+
+        /*
+         * Una instrucción con peso mayor a cero consume un segundo
+         * de CPU por cada clic.
+         */
+        if (instruccionActual.getPeso() > 0) {
+
+            gestorProcesos.incrementarTiempoCPU();
+            ticksRestantes--;
+
+            /*
+             * Todavía no ha consumido todo su peso.
+             */
+            if (ticksRestantes > 0) {
+                proceso.guardarContexto(cpu);
+                return;
+            }
+        }
+
+        /*
+         * Cuando el peso fue consumido se aplica realmente
+         * el efecto de la instrucción.
+         *
+         * INT 09H tiene peso 0, por lo que llega directamente aquí.
+         */
+        boolean pcModificado;
+        try {
+            pcModificado = executor.ejecutar(instruccionActual);
+        } catch (IllegalArgumentException | IllegalStateException | ArithmeticException error) {
+            // Una falla posterior al cambio de proceso no debe finalizar al siguiente PID.
+            if (gestorProcesos.getProcesoActual() != proceso) throw error;
+            finalizarPorError(proceso, error);
+            return;
+        }
+
+        reiniciarControlInstruccion();
+
+        /*
+         * Una interrupción puede haber bloqueado o finalizado el proceso
+         * y el Despachador puede haber entregado la CPU a otro proceso.
+         *
+         * En ese caso no debemos modificar el PC del nuevo proceso.
+         */
+        if (gestorProcesos.getProcesoActual() != proceso) {
+            intentarReactivarSuspendidos();
+            if (gestorProcesos.getProcesoActual() == null && fcfs.hayProcesosPreparados()) {
+                despachador.despacharSiguiente();
+            }
+            return;
+        }
+
+        /*
+         * JMP, JE o JNE pueden modificar directamente el PC.
+         */
+        if (!pcModificado) {
+            cpu.incrementarPC();
+        }
+
+        proceso.guardarContexto(cpu);
+
+        /*
+         * Si se alcanzó el final sin utilizar INT 20H,
+         * también se finaliza el proceso.
+         */
+        if (cpu.getPC() > proceso.getFinPrograma()) {
+            gestorProcesos.finalizarProcesoActual();
+            intentarReactivarSuspendidos();
+            despachador.despacharSiguiente();
         }
     }
 
+    private void finalizarPorError(BCP proceso, RuntimeException error) {
+        despachador.guardarContextoActual();
+        proceso.setMotivoError(error.getMessage());
+        erroresEjecucion.add("ERROR DE EJECUCIÓN | PID " + proceso.getPid()
+                + " | PC=" + proceso.getPC() + " | IR=" + proceso.getIR()
+                + " | " + error.getMessage());
+        gestorProcesos.finalizarProcesoActual();
+        reiniciarControlInstruccion();
+        intentarReactivarSuspendidos();
+        despachador.despacharSiguiente();
+    }
+
+    public List<String> getErroresEjecucion() {
+        return new ArrayList<>(erroresEjecucion);
+    }
 
     /**
-     * Ejecuta todas las instrucciones restantes del programa.
+     * Ejecuta automáticamente mientras existan procesos capaces
+     * de utilizar la CPU.
      *
-     * Internamente reutiliza ejecutarSiguiente() hasta alcanzar
-     * el final del programa.
-     *
-     * @throws IllegalStateException si no existe un programa cargado
+     * Si todos los procesos quedan bloqueados esperando entrada,
+     * el método se detiene para permitir interacción con el usuario.
      */
     public void ejecutarTodo() {
 
-        if (programa == null) {
+        while (!simulacionFinalizada()) {
 
-            throw new IllegalStateException(
-                    "No hay ningún programa cargado."
-            );
-        }
+            if (gestorProcesos.getProcesoActual() == null) {
+                intentarReactivarSuspendidos();
+                if (!fcfs.hayProcesosPreparados()) {
+                    break;
+                }
+            }
 
-        while (!programaFinalizado()) {
             ejecutarSiguiente();
         }
     }
 
-
     /**
-     * Reinicia el simulador para permitir una nueva ejecución.
-     *
-     * Se reinician la CPU y la memoria, se elimina la referencia
-     * al programa actual y se descarta el BCP asociado.
+     * Entrega una entrada de teclado al proceso que está esperando
+     * una INT 09H.
      */
-    public void reiniciar() {
-
-        cpu.reiniciarCPU();
-        memoria.reiniciar();
-
-        programa = null;
-
-        inicioPrograma = -1;
-
-        bcp = null;
-    }
-
-
-    /**
-     * Determina si el programa cargado terminó su ejecución.
-     *
-     * Un programa se considera finalizado cuando el PC alcanza
-     * una dirección igual o superior a la posición inmediatamente
-     * posterior a la última instrucción del programa.
-     *
-     * @return true si el programa finalizó o si no hay programa cargado;
-     *         false en caso contrario
-     */
-    public boolean programaFinalizado() {
-
-        if (programa == null) {
-            return true;
+    public BCP recibirEntradaTeclado(String entrada) {
+        BCP proceso = gestorInterrupciones.recibirEntradaTeclado(entrada);
+        intentarReactivarSuspendidos();
+        if (gestorProcesos.getProcesoActual() == null && fcfs.hayProcesosPreparados()) {
+            despachador.despacharSiguiente();
         }
-
-        /*
-         * La dirección final exclusiva se obtiene sumando
-         * el tamaño del programa a su dirección inicial.
-         */
-        int finPrograma =
-                inicioPrograma
-                + programa.size();
-
-        return cpu.getPC() >= finPrograma;
+        return proceso;
     }
 
+    private void intentarReactivarSuspendidos() {
+        boolean procesoReactivado;
+        do {
+            procesoReactivado = false;
+            for (BCP bcp : gestorProcesos.getListaTrabajos()) {
+                if (bcp.getEstado() == EstadoProceso.PREPARADO_SUSPENDIDO
+                        && gestorMemoriaVirtual.estaEnMemoriaVirtual(bcp)
+                        && gestorProcesos.hayEspacioParaPrograma(bcp.getTamañoPrograma())) {
+                    gestorMemoriaVirtual.reactivarProceso(bcp);
+                    procesoReactivado = true;
+                    break;
+                }
+            }
+        } while (procesoReactivado);
+    }
 
     /**
-     * Obtiene la CPU utilizada por el simulador.
-     *
-     * @return CPU actual
+     * Limpia el control de ticks correspondiente a la instrucción anterior.
      */
+    private void reiniciarControlInstruccion() {
+        instruccionActual = null;
+        ticksRestantes = 0;
+    }
+
+    /**
+     * Indica si ya no existen procesos activos.
+     */
+    public boolean simulacionFinalizada() {
+        return gestorProcesos.getCantidadProcesosActivos() == 0;
+    }
+
+    /** La suspensión de bloqueados es explícita; no existe una política de desalojo automático. */
+    public void suspenderProceso(int pid) {
+        BCP proceso = gestorProcesos.buscarProceso(pid);
+        gestorMemoriaVirtual.suspenderProceso(proceso);
+    }
+
+    public void reiniciar() {
+        reiniciar(configuracion == null || configuracion.isConservarArchivosAlReiniciar());
+    }
+
+    /** Reinicia la simulación y permite escoger si conservar los archivos. */
+    public void reiniciar(boolean conservarArchivos) {
+        erroresEjecucion.clear();
+        gestorInterrupciones.reiniciar();
+        gestorMemoriaVirtual.reiniciar();
+        gestorProcesos.reiniciar();
+        memoria.reiniciar();
+        almacenamiento.reiniciar(!conservarArchivos);
+        cpu.reiniciarCPU();
+        reiniciarControlInstruccion();
+    }
+
     public CPU getCPU() {
         return cpu;
     }
 
-
-    /**
-     * Obtiene la memoria principal del simulador.
-     *
-     * @return memoria actual
-     */
     public Memoria getMemoria() {
         return memoria;
     }
 
-
-    /**
-     * Obtiene el BCP correspondiente al proceso cargado.
-     *
-     * @return BCP actual, o null si no existe un programa cargado
-     */
-    public BCP getBCP() {
-        return bcp;
+    public Almacenamiento getAlmacenamiento() {
+        return almacenamiento;
     }
 
-
-    /**
-     * Obtiene el programa actualmente cargado.
-     *
-     * @return lista de instrucciones del programa
-     */
-    public List<Instruccion> getPrograma() {
-        return programa;
+    public GestorProcesos getGestorProcesos() {
+        return gestorProcesos;
     }
 
-
-    /**
-     * Obtiene la dirección inicial del programa en memoria.
-     *
-     * @return dirección de inicio del programa
-     */
-    public int getInicioPrograma() {
-        return inicioPrograma;
+    public GestorMemoriaVirtual getGestorMemoriaVirtual() {
+        return gestorMemoriaVirtual;
     }
 
+    public GestorInterrupciones getGestorInterrupciones() {
+        return gestorInterrupciones;
+    }
 
-    /**
-     * Obtiene el tamaño total de la memoria configurada.
-     *
-     * @return cantidad total de posiciones de memoria
-     */
+    public BCP getProcesoActual() {
+        return gestorProcesos.getProcesoActual();
+    }
+
+    public String getUltimaSalida() {
+        return gestorInterrupciones.getUltimaSalida();
+    }
+
     public int getSizeMemoria() {
         return memoria.getSize();
     }
 
-
-    /**
-     * Obtiene la primera dirección disponible para memoria de usuario.
-     *
-     * @return dirección inicial del espacio de usuario
-     */
     public int getInicioUsuario() {
         return memoria.getInicioUsuario();
     }
 
-
-    /**
-     * Obtiene la última dirección reservada para el Sistema Operativo.
-     *
-     * @return dirección final del espacio reservado para el S.O.
-     */
     public int getFinSO() {
         return memoria.getFinSO();
     }

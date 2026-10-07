@@ -1,0 +1,3 @@
+PARAM 1, 2, 3
+PARAM 4, 5, 6
+INT 20H

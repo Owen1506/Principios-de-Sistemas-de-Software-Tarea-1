@@ -1,252 +1,393 @@
 package minipc.services;
 
+import minipc.model.BCP;
 import minipc.model.CPU;
 import minipc.model.Instruccion;
 
 /**
- * Se encarga de ejecutar las instrucciones soportadas por la Mini PC.
+ * Ejecuta las instrucciones de la Mini PC.
  *
- * Esta clase recibe una referencia a la CPU y modifica su estado
- * dependiendo de la operación de la instrucción recibida.
- *
- * Las operaciones soportadas actualmente son:
- *
- * - MOV: copia un valor inmediato en un registro.
- * - LOAD: carga en el acumulador el valor de un registro.
- * - STORE: copia el valor del acumulador hacia un registro.
- * - ADD: suma al acumulador el valor de un registro.
- * - SUB: resta al acumulador el valor de un registro.
- *
- * El Executor no modifica directamente el Program Counter (PC);
- * el avance del PC es responsabilidad del Controlador.
+ * El Executor modifica el estado de la CPU según la instrucción recibida.
+ * Las interrupciones se delegan al GestorInterrupciones.
  */
 public class Executor {
 
     private CPU cpu;
+    private GestorProcesos gestorProcesos;
+    private GestorInterrupciones gestorInterrupciones;
 
+    public Executor(CPU cpu, GestorProcesos gestorProcesos, GestorInterrupciones gestorInterrupciones) {
 
-    /**
-     * Crea un nuevo ejecutor asociado a una CPU.
-     *
-     * Todas las instrucciones ejecutadas por esta instancia
-     * modificarán el estado de la CPU recibida.
-     *
-     * @param cpu CPU sobre la cual se ejecutarán las instrucciones
-     */
-    public Executor(CPU cpu) {
+        if (cpu == null) {
+            throw new IllegalArgumentException("La CPU no puede ser null.");
+        }
+
+        if (gestorProcesos == null) {
+            throw new IllegalArgumentException("El gestor de procesos no puede ser null.");
+        }
+
+        if (gestorInterrupciones == null) {
+            throw new IllegalArgumentException("El gestor de interrupciones no puede ser null.");
+        }
+
         this.cpu = cpu;
+        this.gestorProcesos = gestorProcesos;
+        this.gestorInterrupciones = gestorInterrupciones;
     }
 
-
     /**
-     * Ejecuta una instrucción y aplica su efecto sobre la CPU.
+     * Ejecuta una instrucción.
      *
-     * La operación de la instrucción determina qué método específico
-     * debe utilizarse para realizar la ejecución.
-     *
-     * @param instruccion instrucción que se desea ejecutar
-     * @throws IllegalArgumentException si la operación no está soportada
+     * @return true si la instrucción modificó directamente el PC
      */
-    public void ejecutar(Instruccion instruccion) {
+    public boolean ejecutar(Instruccion instruccion) {
 
-        String operacion =
-                instruccion.getOperacion();
+        String operacion = instruccion.getOperacion();
 
-        /*
-         * Se identifica la operación y se delega su ejecución
-         * al método correspondiente.
-         */
         switch (operacion) {
 
             case "MOV":
                 ejecutarMOV(instruccion);
-                break;
+                return false;
 
             case "LOAD":
                 ejecutarLOAD(instruccion);
-                break;
+                return false;
 
             case "STORE":
                 ejecutarSTORE(instruccion);
-                break;
+                return false;
 
             case "ADD":
                 ejecutarADD(instruccion);
-                break;
+                return false;
 
             case "SUB":
                 ejecutarSUB(instruccion);
-                break;
+                return false;
+
+            case "INC":
+                ejecutarINC(instruccion);
+                return false;
+
+            case "DEC":
+                ejecutarDEC(instruccion);
+                return false;
+
+            case "SWAP":
+                ejecutarSWAP(instruccion);
+                return false;
+
+            case "JMP":
+                ejecutarJMP(instruccion);
+                return true;
+
+            case "CMP":
+                ejecutarCMP(instruccion);
+                return false;
+
+            case "JE":
+                return ejecutarJE(instruccion);
+
+            case "JNE":
+                return ejecutarJNE(instruccion);
+
+            case "PARAM":
+                ejecutarPARAM(instruccion);
+                return false;
+
+            case "PUSH":
+                ejecutarPUSH(instruccion);
+                return false;
+
+            case "POP":
+                ejecutarPOP(instruccion);
+                return false;
+
+            case "INT":
+                return ejecutarINT(instruccion);
 
             default:
-                throw new IllegalArgumentException(
-                        "Operación no soportada: " + operacion
-                );
+                throw new IllegalArgumentException("Operación no soportada: " + operacion);
         }
     }
 
-
     /**
-     * Ejecuta una instrucción MOV.
-     *
-     * Copia el valor inmediato de la instrucción dentro
-     * del registro indicado.
-     *
-     * Ejemplo:
-     *
-     * MOV AX, 5
-     *
-     * produce:
-     *
-     * AX = 5
-     *
-     * @param instruccion instrucción MOV que se desea ejecutar
+     * MOV puede mover un número, texto o el contenido de otro registro.
      */
     private void ejecutarMOV(Instruccion instruccion) {
 
-        String registro =
-                instruccion.getRegistro();
+        String registro = instruccion.getRegistro();
 
-        int valor =
-                instruccion.getValor();
+        // MOV registro, "texto"
+        if (instruccion.getTexto() != null) {
 
-        cpu.getRegistros()
-                .modificarRegistro(
-                        registro,
-                        valor
-                );
+            String texto = instruccion.getTexto();
+
+            switch (registro) {
+
+                case "DX":
+                    cpu.getRegistros().setDX(texto);
+                    break;
+
+                case "AH":
+                    cpu.getRegistros().setAH(texto);
+                    break;
+
+                case "AL":
+                    cpu.getRegistros().setAL(texto);
+                    break;
+
+                default:
+                    throw new IllegalArgumentException("El registro " + registro + " no puede recibir texto.");
+            }
+
+            return;
+        }
+
+        // MOV registro, registro
+        if (instruccion.getRegistro2() != null) {
+
+            String registro2 = instruccion.getRegistro2();
+
+            if (registro.equals("DX")) {
+                cpu.getRegistros().setDX(cpu.getRegistros().obtenerRegistroTexto(registro2));
+                return;
+            }
+
+            if (registro.equals("AH")) {
+                cpu.getRegistros().setAH(cpu.getRegistros().obtenerRegistroTexto(registro2));
+                return;
+            }
+
+            if (registro.equals("AL")) {
+                cpu.getRegistros().setAL(cpu.getRegistros().obtenerRegistroTexto(registro2));
+                return;
+            }
+
+            int valor = cpu.getRegistros().obtenerRegistroNumerico(registro2);
+            cpu.getRegistros().modificarRegistroNumerico(registro, valor);
+            return;
+        }
+
+        // MOV registro, número
+        int valor = instruccion.getValor();
+
+        if (registro.equals("AH")) {
+            cpu.getRegistros().setAH(String.valueOf(valor));
+        } else if (registro.equals("AL")) {
+            cpu.getRegistros().setAL(String.valueOf(valor));
+        } else {
+            cpu.getRegistros().modificarRegistroNumerico(registro, valor);
+        }
     }
 
-
     /**
-     * Ejecuta una instrucción LOAD.
-     *
-     * Obtiene el valor almacenado en el registro indicado
-     * y lo copia al acumulador de la CPU.
-     *
-     * Ejemplo:
-     *
-     * AX = 5
-     * LOAD AX
-     *
-     * produce:
-     *
-     * AC = 5
-     *
-     * @param instruccion instrucción LOAD que se desea ejecutar
+     * LOAD REGISTRO
+     * AC obtiene el valor numérico del registro.
      */
     private void ejecutarLOAD(Instruccion instruccion) {
 
-        String registro =
-                instruccion.getRegistro();
-
-        int valor =
-                cpu.getRegistros()
-                        .obtenerRegistro(registro);
+        String registro = instruccion.getRegistro();
+        int valor = cpu.getRegistros().obtenerRegistroNumerico(registro);
 
         cpu.setAC(valor);
     }
 
-
     /**
-     * Ejecuta una instrucción STORE.
-     *
-     * Copia el valor actual del acumulador hacia el registro
-     * especificado por la instrucción.
-     *
-     * Ejemplo:
-     *
-     * AC = 8
-     * STORE AX
-     *
-     * produce:
-     *
-     * AX = 8
-     *
-     * @param instruccion instrucción STORE que se desea ejecutar
+     * STORE REGISTRO
+     * Copia AC dentro del registro indicado.
      */
     private void ejecutarSTORE(Instruccion instruccion) {
 
-        String registro =
-                instruccion.getRegistro();
-
-        int valorAC =
-                cpu.getAC();
-
-        cpu.getRegistros()
-                .modificarRegistro(
-                        registro,
-                        valorAC
-                );
+        String registro = instruccion.getRegistro();
+        cpu.getRegistros().modificarRegistroNumerico(registro, cpu.getAC());
     }
 
-
     /**
-     * Ejecuta una instrucción ADD.
-     *
-     * Suma al acumulador el valor almacenado en el registro
-     * indicado y guarda el resultado nuevamente en el AC.
-     *
-     * Ejemplo:
-     *
-     * AC = 5
-     * BX = 3
-     * ADD BX
-     *
-     * produce:
-     *
-     * AC = 8
-     *
-     * @param instruccion instrucción ADD que se desea ejecutar
+     * ADD REGISTRO
      */
     private void ejecutarADD(Instruccion instruccion) {
 
-        String registro =
-                instruccion.getRegistro();
-
-        int valorRegistro =
-                cpu.getRegistros()
-                        .obtenerRegistro(registro);
-
-        int resultado =
-                cpu.getAC()
-                + valorRegistro;
-
-        cpu.setAC(resultado);
+        int valor = cpu.getRegistros().obtenerRegistroNumerico(instruccion.getRegistro());
+        cpu.setAC(cpu.getAC() + valor);
     }
 
-
     /**
-     * Ejecuta una instrucción SUB.
-     *
-     * Resta al acumulador el valor almacenado en el registro
-     * indicado y guarda el resultado nuevamente en el AC.
-     *
-     * Ejemplo:
-     *
-     * AC = 8
-     * AX = 5
-     * SUB AX
-     *
-     * produce:
-     *
-     * AC = 3
-     *
-     * @param instruccion instrucción SUB que se desea ejecutar
+     * SUB REGISTRO
      */
     private void ejecutarSUB(Instruccion instruccion) {
 
-        String registro =
-                instruccion.getRegistro();
+        int valor = cpu.getRegistros().obtenerRegistroNumerico(instruccion.getRegistro());
+        cpu.setAC(cpu.getAC() - valor);
+    }
 
-        int valorRegistro =
-                cpu.getRegistros()
-                        .obtenerRegistro(registro);
+    /**
+     * INC o INC REGISTRO.
+     */
+    private void ejecutarINC(Instruccion instruccion) {
 
-        int resultado =
-                cpu.getAC()
-                - valorRegistro;
+        String registro = instruccion.getRegistro();
 
-        cpu.setAC(resultado);
+        if (registro == null) {
+            cpu.setAC(cpu.getAC() + 1);
+            return;
+        }
+
+        int valor = cpu.getRegistros().obtenerRegistroNumerico(registro);
+        cpu.getRegistros().modificarRegistroNumerico(registro, valor + 1);
+    }
+
+    /**
+     * DEC o DEC REGISTRO.
+     */
+    private void ejecutarDEC(Instruccion instruccion) {
+
+        String registro = instruccion.getRegistro();
+
+        if (registro == null) {
+            cpu.setAC(cpu.getAC() - 1);
+            return;
+        }
+
+        int valor = cpu.getRegistros().obtenerRegistroNumerico(registro);
+        cpu.getRegistros().modificarRegistroNumerico(registro, valor - 1);
+    }
+
+    /**
+     * Intercambia el valor de dos registros numéricos.
+     */
+    private void ejecutarSWAP(Instruccion instruccion) {
+
+        String registro1 = instruccion.getRegistro();
+        String registro2 = instruccion.getRegistro2();
+
+        int valor1 = cpu.getRegistros().obtenerRegistroNumerico(registro1);
+        int valor2 = cpu.getRegistros().obtenerRegistroNumerico(registro2);
+
+        cpu.getRegistros().modificarRegistroNumerico(registro1, valor2);
+        cpu.getRegistros().modificarRegistroNumerico(registro2, valor1);
+    }
+
+    /**
+     * Salto relativo.
+     */
+    private void ejecutarJMP(Instruccion instruccion) {
+        aplicarSalto(instruccion);
+    }
+
+    /** Valida el destino antes de modificar el PC, dentro del programa actual. */
+    private void aplicarSalto(Instruccion instruccion) {
+        BCP proceso = obtenerProcesoActual();
+        // ASMValidator ya comprobó que el desplazamiento es numérico antes del parseo.
+        // Usa long para detectar también el desbordamiento de un desplazamiento int.
+        long destino = (long) cpu.getPC() + instruccion.getValor();
+        if (destino < proceso.getInicioPrograma() || destino > proceso.getFinPrograma()) {
+            throw new IllegalStateException("Salto " + instruccion.getOperacion()
+                    + " fuera de rango en PID " + proceso.getPid()
+                    + ": PC=" + cpu.getPC() + ", destino=" + destino
+                    + ", rango permitido=" + proceso.getInicioPrograma()
+                    + ".." + proceso.getFinPrograma());
+        }
+        cpu.setPC((int) destino);
+    }
+
+    /**
+     * Compara dos registros y modifica Zero Flag.
+     */
+    private void ejecutarCMP(Instruccion instruccion) {
+
+        int valor1 = cpu.getRegistros().obtenerRegistroNumerico(instruccion.getRegistro());
+        int valor2 = cpu.getRegistros().obtenerRegistroNumerico(instruccion.getRegistro2());
+
+        cpu.setZeroFlag(valor1 == valor2);
+    }
+
+    /**
+     * Salta si Zero Flag es verdadero.
+     */
+    private boolean ejecutarJE(Instruccion instruccion) {
+
+        if (cpu.isZeroFlag()) {
+            aplicarSalto(instruccion);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Salta si Zero Flag es falso.
+     */
+    private boolean ejecutarJNE(Instruccion instruccion) {
+
+        if (!cpu.isZeroFlag()) {
+            aplicarSalto(instruccion);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Agrega los parámetros a la pila del proceso actual.
+     */
+    private void ejecutarPARAM(Instruccion instruccion) {
+
+        BCP proceso = obtenerProcesoActual();
+
+        if (instruccion.getParametros().size()
+                > proceso.getPila().getCapacidad() - proceso.getPila().getCantidad()) {
+            throw new IllegalStateException("Desbordamiento de pila en PARAM: necesita "
+                    + instruccion.getParametros().size() + " posiciones y quedan "
+                    + (proceso.getPila().getCapacidad() - proceso.getPila().getCantidad()) + ".");
+        }
+
+        for (Integer parametro : instruccion.getParametros()) {
+            proceso.getPila().push(parametro);
+        }
+    }
+
+    /**
+     * Coloca en la pila el valor de un registro.
+     */
+    private void ejecutarPUSH(Instruccion instruccion) {
+
+        BCP proceso = obtenerProcesoActual();
+
+        int valor = cpu.getRegistros().obtenerRegistroNumerico(instruccion.getRegistro());
+        proceso.getPila().push(valor);
+    }
+
+    /**
+     * Extrae el último valor de la pila y lo almacena en un registro.
+     */
+    private void ejecutarPOP(Instruccion instruccion) {
+
+        BCP proceso = obtenerProcesoActual();
+
+        int valor = proceso.getPila().pop();
+        cpu.getRegistros().modificarRegistroNumerico(instruccion.getRegistro(), valor);
+    }
+
+    /**
+     * Delega las interrupciones al GestorInterrupciones.
+     */
+    private boolean ejecutarINT(Instruccion instruccion) {
+        return gestorInterrupciones.atender(instruccion);
+    }
+
+    /**
+     * Obtiene el proceso que actualmente tiene la CPU.
+     */
+    private BCP obtenerProcesoActual() {
+
+        BCP proceso = gestorProcesos.getProcesoActual();
+
+        if (proceso == null) {
+            throw new IllegalStateException("No existe un proceso actualmente en ejecución.");
+        }
+
+        return proceso;
     }
 }
